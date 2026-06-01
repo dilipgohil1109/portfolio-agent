@@ -1132,6 +1132,8 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
     <button class="wl-fb" onclick="setBuyView('sentiment',this)">&#x1F4C8; Best Sentiment</button>
     <button class="wl-fb" onclick="setBuyView('eps',this)">&#x1F4B9; EPS Growth</button>
     <button class="wl-fb" onclick="setBuyView('volume',this)">&#x1F50A; Volume Spike</button>
+    <button class="wl-fb" onclick="setBuyView('rsi',this)">&#x1F4C9; RSI Oversold</button>
+    <button class="wl-fb" onclick="setBuyView('upgrades',this)">&#x2B06; Analyst Upgrades</button>
   </div>
 
   <!-- SORT + SEARCH -->
@@ -2604,21 +2606,30 @@ Return ONLY the JSON array — no markdown, no explanation before or after:
     "action": "BUY",
     "risk_level": "Low",
     "speed": "Fast",
-    "upside_thesis": "2-3 sentences: why this has meaningful room to go up, key growth drivers",
-    "risk": "Single biggest risk factor that could prevent this thesis from playing out",
-    "what_to_buy": "Specific guidance: suggested entry price or range, position size relative to portfolio, any conditions to wait for",
-    "earnings_note": "Next earnings date if within 30 days, expected EPS, and BEAT or MISS expectation — else empty string",
-    "news_summary": "Most important recent news or analyst action in 1 sentence"
+    "upside_thesis": "2-3 sentences: why this has room to go up, key growth drivers",
+    "risk": "Single biggest risk factor in 1 sentence",
+    "what_to_buy": "Entry price range, suggested position size vs portfolio, any conditions to wait for",
+    "earnings_note": "Next earnings date if within 30 days + EPS estimate + BEAT or MISS expectation — else empty",
+    "news_summary": "Most important recent news or analyst action in 1 sentence",
+    "strategy_rationale": "One plain-English sentence explaining the strategy: e.g. Classic recovery play — down 42% from highs with 47% analyst upside and improving fundamentals",
+    "rsi": 34,
+    "short_interest_pct": 4.2,
+    "pe_vs_sector": "cheap",
+    "analyst_momentum": "upgrades"
   }
 ]
 
-Rules:
-- action must be exactly: STRONG_BUY | BUY | HOLD | SKIP
-- risk_level must be exactly: Low | Medium | High | Very High
-- speed must be exactly: Fast | Moderate | Slow
-- Include all ${notOwned.length} stocks in the response
-- For stocks with no recent news or data, use your training knowledge and note the limitation
-- Prioritise stocks where my portfolio has NO existing position in that sector`;
+Field rules:
+- action: STRONG_BUY | BUY | HOLD | SKIP (exactly)
+- risk_level: Low | Medium | High | Very High (exactly)
+- speed: Fast | Moderate | Slow (exactly)
+- rsi: number 0-100 (search for current RSI-14 value, or null if not found)
+- short_interest_pct: number like 4.2 meaning 4.2% (search for short float %, or null)
+- pe_vs_sector: "cheap" | "fair" | "expensive" vs sector average P/E (or null)
+- analyst_momentum: "upgrades" if net upgrades last 30 days, "downgrades" if net downgrades, "neutral" if mixed (or null)
+- strategy_rationale: must reference the specific numbers (52W position, upside %, EPS growth etc)
+- Include ALL ${notOwned.length} stocks — for missing online data use null, not omit the field
+- Prioritise stocks where my portfolio has NO position in that sector`;
 }
 
 function generateWatchlistPrompt() {
@@ -2653,14 +2664,20 @@ function applyWatchlistResponse() {
       if (!r.ticker) return;
       wlAICache[r.ticker] = {
         score:        Number(r.score) || 5,
-        action:       String(r.action  || 'HOLD').trim(),
-        risk_level:   String(r.risk_level || 'Medium').trim(),
-        speed:        String(r.speed || 'Moderate').trim(),
+        action:       String(r.action        || 'HOLD').trim(),
+        risk_level:   String(r.risk_level    || 'Medium').trim(),
+        speed:        String(r.speed         || 'Moderate').trim(),
         upside_thesis:String(r.upside_thesis || ''),
-        risk:         String(r.risk || ''),
-        what_to_buy:  String(r.what_to_buy || ''),
+        risk:         String(r.risk          || ''),
+        what_to_buy:  String(r.what_to_buy   || ''),
         earnings_note:String(r.earnings_note || ''),
-        news_summary: String(r.news_summary || ''),
+        news_summary: String(r.news_summary  || ''),
+        // New online indicator fields
+        strategy_rationale: String(r.strategy_rationale || ''),
+        rsi:              r.rsi              ?? null,
+        short_interest_pct: r.short_interest_pct ?? null,
+        pe_vs_sector:     r.pe_vs_sector     ?? null,
+        analyst_momentum: r.analyst_momentum ?? null,
       };
       applied++;
     });
@@ -2693,106 +2710,214 @@ function initWatchlist() { renderWatchlist(); }
 let buyView = 'all';
 
 // Signal → numeric score map
+
+// ── SCORING ENGINE (0-100) ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// SMART BUY SCORING ENGINE v2
+// 10 signals, rebalanced weights, cross-signal intelligence
+// ═══════════════════════════════════════════════════════════════
+
 const SIG_SCORE = {
   'Very Positive':2,'Positive':1,'Neutral':0,'Negative':-1,'Very Negative':-2,
   'Very Bullish':2,'Bullish':1,'Bearish':-1,'Very Bearish':-2,
-  'Very Positive ':2,'Positive ':1,'Neutral ':0,'Negative ':1,'Very Negative ':-2,
 };
 function sig(v){ return SIG_SCORE[String(v||'').trim()] ?? 0; }
 
-// ── SCORING ENGINE (0-100) ───────────────────────────────────────
+// ── 52-WEEK RANGE CALCULATION ───────────────────────────────
+// Since CSV has One Year% (not actual 52W high/low), we derive:
+//   one_yr < 0  → price FELL from a year ago → year-ago price ≈ 52W high
+//   one_yr > 0  → price ROSE from a year ago → year-ago price ≈ 52W low
+// position_in_range = 0% at low end, 100% at high end
+function calc52W(price, oneYrPct) {
+  if (price == null || oneYrPct == null) return { pos: null, low: null, high: null };
+  if (oneYrPct < 0) {
+    // Price dropped — year-ago was higher (≈52W high)
+    const high = price / (1 + oneYrPct / 100);
+    const low  = price; // current price is near the low
+    const pos  = 0;     // at low end by definition
+    return { pos: Math.round(pos), low: Math.round(low * 100) / 100, high: Math.round(high * 100) / 100 };
+  } else {
+    // Price rose — year-ago was lower (≈52W low)
+    const low  = price / (1 + oneYrPct / 100);
+    const high = price; // current price is near the high
+    const range = high - low;
+    // Position: we're AT the high end, so ~85-100% depending on magnitude
+    const pos = Math.min(100, Math.round(70 + (oneYrPct / 200) * 30));
+    return { pos, low: Math.round(low * 100) / 100, high: Math.round(high * 100) / 100 };
+  }
+}
+
 function computeBuyScore(w) {
   let score = 0;
   const reasons = [], flags = [], strategies = [];
 
-  // 1. SmartScore  (0-20 pts)
+  // ── SIGNAL 1: SmartScore (0-20 pts) ──────────────────────
+  // TipRanks' own composite score — highest quality signal
   const ss = w.ss;
   if (ss != null) {
-    score += Math.round((ss/10)*20);
+    score += Math.round((ss / 10) * 20);
     if (ss >= 9) reasons.push(`SmartScore ${ss}/10 ★`);
     else if (ss >= 7) reasons.push(`SmartScore ${ss}/10`);
+    else if (ss <= 3) flags.push(`SmartScore ${ss}/10 — low quality`);
   }
 
-  // 2. Analyst Consensus  (0-15 pts)
+  // ── SIGNAL 2: Analyst Consensus (0-15 pts) ────────────────
+  // Weighted average of analyst buy/hold/sell ratings
   const cons = w.consensus || '';
-  const cPts = {'Strong Buy':15,'Moderate Buy':10,'Hold':3}[cons] ?? 0;
+  const cPts = { 'Strong Buy': 15, 'Moderate Buy': 10, 'Hold': 3, 'Moderate Sell': 0, 'Sell': 0 }[cons] ?? 0;
   score += cPts;
   if (cPts >= 10) reasons.push(cons);
+  else if (cPts === 0 && cons) flags.push(cons);
 
-  // 3. Analyst Upside  (0-20 pts)
+  // ── SIGNAL 3: Analyst Upside % (0-20 pts) ────────────────
+  // Consensus price target vs current price
   const tpct = w.target_pct;
   if (tpct != null) {
-    const pts = tpct>=50?20 : tpct>=30?15 : tpct>=15?10 : tpct>=5?5 : 0;
+    const pts = tpct >= 50 ? 20 : tpct >= 30 ? 15 : tpct >= 15 ? 10 : tpct >= 5 ? 5 : 0;
     score += pts;
-    if (pts >= 10) reasons.push(`+${tpct.toFixed(0)}% to target${tpct>=50?' ★':''}`);
+    if (pts >= 10) reasons.push(`+${tpct.toFixed(0)}% to target${tpct >= 50 ? ' ★' : ''}`);
+    if (tpct < 0) flags.push(`Price above target — overvalued?`);
   }
 
-  // 4. Top analyst confirmation  (+5)
+  // ── SIGNAL 4: Top Analyst Confirmation (+5 pts) ───────────
+  // Best-performing analyst agrees with consensus — reduces false signals
   if (tpct != null && w.top_analyst_pct != null && Math.abs(tpct - w.top_analyst_pct) < 5) {
-    score += 5; reasons.push('Top analyst confirms');
+    score += 5;
+    reasons.push('Top analyst confirms');
   }
 
-  // 5. Combined sentiment  (-8 to +16 pts)
-  const sentTotal = sig(w.insider) + sig(w.hedge) + sig(w.inv_sent) + sig(w.news_sent);
-  score += Math.round((sentTotal + 8) * 1.0);
-  if (sentTotal >= 4)  reasons.push('Sentiment ↑↑');
-  else if (sentTotal >= 2) reasons.push('Sentiment ↑');
-  else if (sentTotal <= -4) flags.push('Weak sentiment ↓');
+  // ── SIGNAL 5: Hedge Fund Signal (0-10 pts) ────────────────
+  // SEPARATED from insider — HF is a better institutional quality signal
+  // Insiders sell for many reasons (taxes, diversification) — less meaningful
+  const hfSig = sig(w.hedge);
+  if (hfSig >= 2)       { score += 10; reasons.push('Hedge funds buying ★'); }
+  else if (hfSig === 1) { score += 6;  reasons.push('Hedge funds positive'); }
+  else if (hfSig === 0) { score += 2;  } // neutral = slight positive (they're holding)
+  else if (hfSig === -1){ score -= 2;  flags.push('Hedge funds reducing'); }
+  else if (hfSig <= -2) { score -= 5;  flags.push('Hedge funds exiting ↓'); }
 
-  // 6. Blogger consensus  (+3)
-  if (w.blogger === 'Bullish') { score += 3; }
+  // ── SIGNAL 6: Investor + News Sentiment (0-10 pts) ────────
+  // Retail investor sentiment + news sentiment — combined
+  const sentPublic = sig(w.inv_sent) + sig(w.news_sent);
+  const sentPts = Math.round((sentPublic + 4) * (10 / 8));
+  score += Math.max(0, Math.min(10, sentPts));
+  if (sentPublic >= 3)  reasons.push('News + investor sentiment ↑↑');
+  else if (sentPublic >= 1) reasons.push('Sentiment positive');
+  else if (sentPublic <= -3) flags.push('Negative sentiment ↓↓');
 
-  // 7. Volume spike  (-3 to +8 pts)
+  // ── SIGNAL 7: Insider Signal (smaller weight, -3 to +4) ───
+  // Insider buying = strong bullish signal (they know the company)
+  // Insider selling = NOT necessarily bearish (routine diversification)
+  const insSig = sig(w.insider);
+  if (insSig >= 2)       { score += 4; reasons.push('Insider buying ★'); }
+  else if (insSig === 1) { score += 2; reasons.push('Insider positive'); }
+  else if (insSig <= -2) { score -= 1; } // slight penalty only — selling is normal
+
+  // ── SIGNAL 8: Volume × Price Direction (0-8 pts) ──────────
+  // Volume spike is only bullish if price is NOT in freefall
+  // A crash on heavy volume is bearish, not a buy signal
   const vr = w.vol_ratio;
-  if (vr != null) {
-    if (vr >= 2.0)       { score += 8; reasons.push(`Volume spike ${vr.toFixed(1)}x ★`); strategies.push('MOMENTUM'); }
-    else if (vr >= 1.5)  { score += 5; reasons.push(`Vol above avg ${vr.toFixed(1)}x`); strategies.push('MOMENTUM'); }
-    else if (vr < 0.4)   { score -= 3; flags.push('Low volume'); }
-  }
-
-  // 8. EPS Growth  (-5 to +8 pts)
-  const eg = w.eps_growth;
-  if (eg != null) {
-    if (eg >= 100)      { score += 8; reasons.push(`EPS growth +${eg.toFixed(0)}% ★`); strategies.push('GROWTH'); }
-    else if (eg >= 30)  { score += 6; reasons.push(`EPS growth +${eg.toFixed(0)}%`); }
-    else if (eg >= 10)  { score += 3; reasons.push(`EPS growth +${eg.toFixed(0)}%`); }
-    else if (eg < -20)  { score -= 5; flags.push(`EPS declining ${eg.toFixed(0)}%`); }
-  }
-
-  // 9. 52-week position strategy  (-3 to +10 pts)
   const oy = w.one_year_pct;
+  if (vr != null) {
+    const priceRising = oy != null && oy > -10; // not in a sharp downtrend
+    if (vr >= 2.0 && priceRising)  { score += 8; reasons.push(`Volume spike ${vr.toFixed(1)}x ★`); strategies.push('MOMENTUM'); }
+    else if (vr >= 1.5 && priceRising) { score += 5; reasons.push(`Vol above avg ${vr.toFixed(1)}x`); strategies.push('MOMENTUM'); }
+    else if (vr >= 2.0 && !priceRising){ score += 1; flags.push(`High vol on downtrend — caution`); }
+    else if (vr < 0.4) { score -= 2; flags.push('Low volume — weak conviction'); }
+  }
+
+  // ── SIGNAL 9: EPS Growth + Profitability (0-8 pts) ────────
+  // EPS growth ONLY counts positively if already profitable (EPS TTM > 0)
+  // Avoids rewarding loss-narrowing in unprofitable companies as "growth"
+  const eg  = w.eps_growth;
+  const profitable = w.eps_ttm != null && w.eps_ttm > 0;
+  if (eg != null) {
+    if (eg >= 100 && profitable) { score += 8; reasons.push(`EPS growth +${eg.toFixed(0)}% (profitable) ★`); strategies.push('GROWTH'); }
+    else if (eg >= 30 && profitable)  { score += 6; reasons.push(`EPS growth +${eg.toFixed(0)}%`); strategies.push('GROWTH'); }
+    else if (eg >= 10 && profitable)  { score += 3; reasons.push(`EPS growth +${eg.toFixed(0)}%`); }
+    else if (eg >= 50 && !profitable) { score += 2; reasons.push(`Losses narrowing +${eg.toFixed(0)}%`); } // small credit
+    else if (eg < -20) { score -= 4; flags.push(`EPS declining ${eg.toFixed(0)}%`); }
+  }
+  if (!profitable && w.eps_ttm != null) {
+    flags.push(`Not yet profitable (EPS $${w.eps_ttm.toFixed(2)})`);
+  }
+
+  // ── SIGNAL 10: 52W Position × Analyst Upside (0-12 pts) ──
+  // The key cross-signal: position in range COMBINED with upside
+  // Near 52W LOW + high upside = best risk/reward (buy the dip)
+  // Near 52W HIGH + low upside = worst risk/reward (don't chase)
+  const w52 = calc52W(w.price, oy);
   if (oy != null) {
     if (oy <= -30 && tpct != null && tpct >= 25) {
-      score += 10;
-      reasons.push(`Near 52W low (-${Math.abs(oy).toFixed(0)}%yr), +${tpct.toFixed(0)}% to target ★`);
+      score += 12;
+      reasons.push(`Near 52W low (-${Math.abs(oy).toFixed(0)}%), +${tpct.toFixed(0)}% to target ★`);
       strategies.push('52W_LOW_RECOVERY');
     } else if (oy <= -15 && tpct != null && tpct >= 15) {
-      score += 5;
-      reasons.push(`Pullback -${Math.abs(oy).toFixed(0)}%yr with upside`);
+      score += 7;
+      reasons.push(`Pulled back -${Math.abs(oy).toFixed(0)}% with upside`);
       strategies.push('52W_LOW_RECOVERY');
-    } else if (oy >= 50) {
-      score += 4; reasons.push(`Momentum +${oy.toFixed(0)}%yr`);
+    } else if (oy <= -5 && tpct != null && tpct >= 10) {
+      score += 3;
+    } else if (oy >= 50 && tpct != null && tpct >= 20) {
+      // Momentum WITH room to run — still valid
+      score += 5;
+      reasons.push(`Momentum +${oy.toFixed(0)}%yr, still +${tpct.toFixed(0)}% to target`);
       strategies.push('MOMENTUM');
+    } else if (oy >= 50 && (tpct == null || tpct < 10)) {
+      // Near 52W HIGH with little upside — cap the score, add flag
+      score = Math.min(score, 62);
+      flags.push(`Near 52W high (+${oy.toFixed(0)}%yr) with limited upside — chasing risk`);
     } else if (oy >= 100) {
-      flags.push(`Already up ${oy.toFixed(0)}%yr — chasing risk`);
+      score = Math.min(score, 58);
+      flags.push(`Up ${oy.toFixed(0)}%yr — very extended, high reversal risk`);
     }
   }
 
-  // 10. Upcoming earnings catalyst  (+3 to +6)
+  // ── SIGNAL 11: Earnings Catalyst (0-6 pts) ────────────────
+  // Only counts if EPS forecast > last year (beat expected)
   const earn = w.earn_date;
   if (earn && earn !== 'nan' && earn !== 'null') {
     try {
-      const dUntil = Math.round((new Date(earn.replace(/-/g,'/')) - new Date()) / 86400000);
+      const dUntil = Math.round((new Date(earn.replace(/-/g, '/')) - new Date()) / 86400000);
       if (dUntil >= 0 && dUntil <= 10) {
-        const epsF = w.eps_forecast, epsL = w.eps_last_yr;
-        const beatExp = epsF != null && epsL != null && epsF > epsL * 1.1;
+        const beatExp = w.eps_forecast != null && w.eps_last_yr != null && w.eps_forecast > w.eps_last_yr * 1.05;
         if (beatExp) { score += 6; reasons.push(`Earnings ${dUntil}d — beat expected ★`); strategies.push('EARNINGS_CATALYST'); }
-        else         { score += 2; reasons.push(`Earnings in ${dUntil} days`); }
+        else { score += 1; reasons.push(`Earnings in ${dUntil} days`); }
       } else if (dUntil >= 0 && dUntil <= 30) {
-        score += 2; reasons.push(`Earnings ${earn}`);
+        score += 2;
+        reasons.push(`Earnings ${earn}`);
         strategies.push('EARNINGS_CATALYST');
       }
-    } catch(e) { /* ignore parse error */ }
+    } catch(e) {}
+  }
+
+  // ── AI-FETCHED ONLINE INDICATORS (from prompt response) ───
+  // RSI, short interest, P/E vs sector, analyst momentum
+  const ai = w.ai;
+  if (ai) {
+    // RSI bonus/penalty
+    const rsi = ai.rsi;
+    if (rsi != null) {
+      if (rsi <= 30)      { score += 5; reasons.push(`RSI ${rsi} oversold ★`); }
+      else if (rsi <= 40) { score += 2; reasons.push(`RSI ${rsi} low — opportunity`); }
+      else if (rsi >= 70) { score -= 4; flags.push(`RSI ${rsi} overbought`); }
+    }
+    // Short interest penalty
+    const si = ai.short_interest_pct;
+    if (si != null) {
+      if (si >= 20)       { score -= 5; flags.push(`Short interest ${si}% — high risk`); }
+      else if (si >= 10)  { score -= 2; flags.push(`Short interest ${si}%`); }
+      else if (si <= 3)   { score += 2; reasons.push(`Low short interest ${si}%`); }
+    }
+    // Analyst momentum (recent upgrades vs downgrades)
+    const am = ai.analyst_momentum;
+    if (am === 'upgrades') { score += 4; reasons.push('Recent analyst upgrades ↑'); }
+    else if (am === 'downgrades') { score -= 4; flags.push('Recent analyst downgrades ↓'); }
+    // PE vs sector
+    const pe_vs = ai.pe_vs_sector;
+    if (pe_vs === 'cheap')     { score += 3; reasons.push('Cheap vs sector P/E'); }
+    else if (pe_vs === 'fair') { score += 1; }
+    else if (pe_vs === 'expensive') { score -= 2; flags.push('Expensive vs sector P/E'); }
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -2803,15 +2928,15 @@ function computeBuyScore(w) {
     score >= 45 ? 'WATCH'      :
     score >= 30 ? 'HOLD'       : 'SKIP';
 
-  // Determine primary strategy tag
   const primaryStrategy =
-    strategies.includes('52W_LOW_RECOVERY') ? '52W_LOW_RECOVERY' :
+    strategies.includes('52W_LOW_RECOVERY')  ? '52W_LOW_RECOVERY'  :
     strategies.includes('EARNINGS_CATALYST') ? 'EARNINGS_CATALYST' :
-    strategies.includes('GROWTH') ? 'GROWTH' :
-    strategies.includes('MOMENTUM') ? 'MOMENTUM' : 'VALUE';
+    strategies.includes('GROWTH')            ? 'GROWTH'            :
+    strategies.includes('MOMENTUM')          ? 'MOMENTUM'          : 'VALUE';
 
-  return { score, action, reasons: reasons.slice(0,5), flags: flags.slice(0,3), strategies, primaryStrategy };
+  return { score, action, reasons: reasons.slice(0, 5), flags: flags.slice(0, 3), strategies, primaryStrategy, w52 };
 }
+
 
 // ── HELPERS ───────────────────────────────────────────────────
 function daysUntil(dateStr) {
@@ -2866,11 +2991,13 @@ function renderBuyTab() {
   if (buyView === '52low')     list = list.filter(w => w.strategies.includes('52W_LOW_RECOVERY'));
   else if (buyView === 'momentum')  list = list.filter(w => w.strategies.includes('MOMENTUM'));
   else if (buyView === 'value')     list = list.filter(w => (w.target_pct||0) >= 30);
-  else if (buyView === 'safe')      list = list.filter(w => sig(w.insider)>=0 && sig(w.hedge)>=0 && (w.ss||0)>=6);
+  else if (buyView === 'safe')      list = list.filter(w => sig(w.hedge)>=0 && (w.ss||0)>=6 && (w.eps_ttm==null||w.eps_ttm>0) && (w.one_year_pct==null||w.one_year_pct>-40));
   else if (buyView === 'earnings')  list = list.filter(w => { const d = daysUntil(w.earn_date); return d!=null && d>=0 && d<=30; });
   else if (buyView === 'sentiment') list = list.filter(w => sig(w.news_sent)>=1 && sig(w.inv_sent)>=1);
   else if (buyView === 'eps')       list = list.filter(w => (w.eps_growth||0) >= 20);
   else if (buyView === 'volume')    list = list.filter(w => (w.vol_ratio||0) >= 1.4);
+  else if (buyView === 'rsi')       list = list.filter(w => w.ai && w.ai.rsi != null && w.ai.rsi <= 35);
+  else if (buyView === 'upgrades')  list = list.filter(w => w.ai && w.ai.analyst_momentum === 'upgrades');
 
   // Skip low-quality (SKIP action) by default
   if (buyView === 'all') list = list.filter(w => w.score >= 45);
@@ -2921,59 +3048,109 @@ function renderBuyTab() {
 // ── BUY CARD HTML ─────────────────────────────────────────────
 function buyCardHTML(w) {
   const actionColor = {
-    'STRONG BUY':'#1e7e34','BUY':'#0c8b7a','WATCH':'#e65100','HOLD':'var(--text3)','SKIP':'#c62828'
-  }[w.action] || 'var(--text3)';
+    'STRONG BUY':'#1e7e34','BUY':'#0c8b7a','WATCH':'#e65100','HOLD':'#6b7280','SKIP':'#c62828'
+  }[w.action] || '#6b7280';
   const actionBg = {
-    'STRONG BUY':'#f0fff4','BUY':'#e8f8f0','WATCH':'#fff8f2','HOLD':'#f8f9fa','SKIP':'#fff5f5'
-  }[w.action] || '#f8f9fa';
+    'STRONG BUY':'#f0fff4','BUY':'#e8f8f0','WATCH':'#fff8f2','HOLD':'#f9fafb','SKIP':'#fff5f5'
+  }[w.action] || '#f9fafb';
   const borderColor = {
-    'STRONG BUY':'#86efac','BUY':'#c3e6cb','WATCH':'#ffd699','HOLD':'var(--border)','SKIP':'#f5c6cb'
-  }[w.action] || 'var(--border)';
+    'STRONG BUY':'#86efac','BUY':'#c3e6cb','WATCH':'#ffd699','HOLD':'#e5e7eb','SKIP':'#f5c6cb'
+  }[w.action] || '#e5e7eb';
 
   const ssColor = !w.ss ? 'var(--text3)' : w.ss>=8 ? '#1e7e34' : w.ss>=6 ? '#e65100' : '#c62828';
 
-  // 52W position display
-  const oy = w.one_year_pct;
-  const oyStr = oy != null ? (oy >= 0 ? `+${oy.toFixed(1)}%` : `${oy.toFixed(1)}%`) : null;
-  const oyColor = oy == null ? 'var(--text3)' : oy <= -30 ? '#c62828' : oy <= -10 ? '#e65100' : oy >= 50 ? '#1e7e34' : 'var(--text2)';
-  const w52tag  = oy != null && oy <= -30 ? '<span style="font-size:9px;background:#fdecea;color:#c62828;border:1px solid #f5c6cb;border-radius:3px;padding:1px 5px;font-weight:700">📉 Near 52W Low</span>' :
-                  oy != null && oy >= 50  ? '<span style="font-size:9px;background:#e8f8f0;color:#1e7e34;border:1px solid #c3e6cb;border-radius:3px;padding:1px 5px;font-weight:700">🚀 52W High Momentum</span>' : '';
+  // ── 52-WEEK VISUAL BAR ──────────────────────────────────────
+  const w52 = w.w52 || calc52W(w.price, w.one_year_pct);
+  const oy  = w.one_year_pct;
+  let w52Bar = '', w52Tag = '';
+  if (w52.pos !== null) {
+    const pct   = w52.pos;
+    const barColor = pct <= 20 ? '#c62828' : pct <= 40 ? '#e65100' : pct <= 65 ? '#0c8b7a' : '#1e7e34';
+    const posLabel = pct <= 15 ? '🔴 Near 52W Low' : pct <= 35 ? '🟠 Lower range' : pct <= 65 ? '🟡 Mid-range' : pct <= 85 ? '🟢 Upper range' : '🟢 Near 52W High';
+    const lowStr  = w52.low  ? '$' + w52.low.toFixed(0)  : '—';
+    const highStr = w52.high ? '$' + w52.high.toFixed(0) : '—';
+    w52Bar = `
+      <div style="margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:3px">
+          <span>52W Range (approx)</span>
+          <span style="font-weight:700;color:${barColor}">${posLabel} — ${pct}%</span>
+        </div>
+        <div style="height:6px;background:#e5e7eb;border-radius:3px;position:relative;overflow:visible">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#c62828,#e65100,#1e7e34);border-radius:3px"></div>
+          <div style="position:absolute;top:-2px;left:calc(${pct}% - 4px);width:8px;height:10px;background:${barColor};border-radius:2px;border:1px solid #fff"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px">
+          <span>Low ${lowStr}</span>
+          <span style="font-size:9px;color:var(--text2);font-weight:600">${oy != null ? (oy>=0?'+':'')+oy.toFixed(1)+'% vs 1yr ago' : ''}</span>
+          <span>High ${highStr}</span>
+        </div>
+      </div>`;
+    // Short tag for badge row
+    if (pct <= 20) w52Tag = '<span style="font-size:9px;background:#fdecea;color:#c62828;border:1px solid #f5c6cb;border-radius:3px;padding:1px 5px;font-weight:700">📉 Near 52W Low</span>';
+    else if (pct >= 85) w52Tag = '<span style="font-size:9px;background:#e8f8f0;color:#1e7e34;border:1px solid #c3e6cb;border-radius:3px;padding:1px 5px;font-weight:700">🚀 52W High</span>';
+  }
 
-  // Volume badge
+  // ── AI-FETCHED ONLINE INDICATORS ────────────────────────────
+  const ai = w.ai;
+  let rsiTag = '', siTag = '', peTag = '', amTag = '', strategyLine = '';
+  if (ai) {
+    const rsi = ai.rsi;
+    if (rsi != null) {
+      const rsiColor = rsi <= 30 ? '#1e7e34' : rsi >= 70 ? '#c62828' : '#6b7280';
+      const rsiLbl   = rsi <= 30 ? 'Oversold ★' : rsi >= 70 ? 'Overbought' : 'Neutral';
+      rsiTag = `<span style="font-size:9px;background:${rsi<=30?'#e8f8f0':rsi>=70?'#fdecea':'#f3f4f6'};color:${rsiColor};border:1px solid ${rsi<=30?'#c3e6cb':rsi>=70?'#f5c6cb':'#e5e7eb'};border-radius:3px;padding:1px 5px;font-weight:700">RSI ${rsi} ${rsiLbl}</span>`;
+    }
+    const si = ai.short_interest_pct;
+    if (si != null) {
+      const siColor = si >= 20 ? '#c62828' : si >= 10 ? '#e65100' : '#1e7e34';
+      siTag = `<span style="font-size:9px;background:${si>=10?'#fdecea':'#e8f8f0'};color:${siColor};border:1px solid ${si>=10?'#f5c6cb':'#c3e6cb'};border-radius:3px;padding:1px 5px;font-weight:700">Short ${si}%</span>`;
+    }
+    if (ai.pe_vs_sector) {
+      const peColor = ai.pe_vs_sector === 'cheap' ? '#1e7e34' : ai.pe_vs_sector === 'expensive' ? '#c62828' : '#6b7280';
+      peTag = `<span style="font-size:9px;background:#f3f4f6;color:${peColor};border:1px solid #e5e7eb;border-radius:3px;padding:1px 5px;font-weight:700">P/E ${ai.pe_vs_sector}</span>`;
+    }
+    if (ai.analyst_momentum) {
+      const amColor = ai.analyst_momentum === 'upgrades' ? '#1e7e34' : '#c62828';
+      const amIcon  = ai.analyst_momentum === 'upgrades' ? '↑' : '↓';
+      amTag = `<span style="font-size:9px;background:${ai.analyst_momentum==='upgrades'?'#e8f8f0':'#fdecea'};color:${amColor};border:1px solid ${ai.analyst_momentum==='upgrades'?'#c3e6cb':'#f5c6cb'};border-radius:3px;padding:1px 5px;font-weight:700">${amIcon} ${ai.analyst_momentum}</span>`;
+    }
+    if (ai.strategy_rationale) {
+      strategyLine = `<div style="font-size:11px;color:var(--text2);line-height:1.6;background:rgba(255,255,255,.7);border-radius:4px;padding:6px 8px;margin-bottom:6px;border-left:3px solid ${actionColor}"><em>${ai.strategy_rationale}</em></div>`;
+    }
+  }
+
+  // ── OTHER BADGES ─────────────────────────────────────────────
   const vr = w.vol_ratio;
-  const volBadge = vr && vr >= 1.5 ? `<span style="font-size:9px;background:#e8f0fe;color:#3b5bdb;border:1px solid #b8ccf8;border-radius:3px;padding:1px 5px;font-weight:700">🔊 Vol ${vr.toFixed(1)}x</span>` : '';
-
-  // EPS growth badge
-  const epsBadge = w.eps_growth != null && w.eps_growth >= 30
+  const volBadge = vr && vr >= 1.5
+    ? `<span style="font-size:9px;background:#e8f0fe;color:#3b5bdb;border:1px solid #b8ccf8;border-radius:3px;padding:1px 5px;font-weight:700">🔊 Vol ${vr.toFixed(1)}x</span>` : '';
+  const epsBadge = w.eps_growth != null && w.eps_growth >= 30 && w.eps_ttm != null && w.eps_ttm > 0
     ? `<span style="font-size:9px;background:#e8f8f0;color:#1e7e34;border:1px solid #c3e6cb;border-radius:3px;padding:1px 5px;font-weight:700">📈 EPS +${w.eps_growth.toFixed(0)}%</span>` : '';
-
-  // Earnings badge
   const dUntil = daysUntil(w.earn_date);
   const earnBadge = dUntil != null && dUntil >= 0 && dUntil <= 30
     ? `<span style="font-size:9px;background:#fff3e0;color:#e65100;border:1px solid #ffd699;border-radius:3px;padding:1px 5px;font-weight:700">📅 Earnings ${dUntil <= 10 ? dUntil+'d ⚡' : w.earn_date}</span>` : '';
-
-  // Owned tag
-  const ownedTag = w.in_portfolio ? '<span style="font-size:9px;background:#e8f8f0;color:#0c8b7a;border:1px solid #c3e6cb;border-radius:3px;padding:1px 5px;font-weight:700">✓ Owned</span>' : '';
+  const ownedTag = w.in_portfolio
+    ? '<span style="font-size:9px;background:#e8f8f0;color:#0c8b7a;border:1px solid #c3e6cb;border-radius:3px;padding:1px 5px;font-weight:700">✓ Owned</span>' : '';
+  const profitTag = w.eps_ttm != null && w.eps_ttm <= 0
+    ? '<span style="font-size:9px;background:#fdecea;color:#c62828;border:1px solid #f5c6cb;border-radius:3px;padding:1px 5px;font-weight:700">Not profitable</span>' : '';
 
   // Score bar
-  const scoreWidth = w.score + '%';
   const scoreColor = w.score >= 70 ? '#1e7e34' : w.score >= 55 ? '#0c8b7a' : w.score >= 40 ? '#e65100' : '#c62828';
 
-  // Sentiment summary
+  // Sentiment row — HF gets star treatment now
+  const hfSig2 = sig(w.hedge);
   const sentRow = [
-    sentBadge(w.insider, 'Insider'),
-    sentBadge(w.hedge,   'HF'),
-    sentBadge(w.inv_sent,'Investors'),
-    sentBadge(w.news_sent,'News'),
+    w.insider  ? sentBadge(w.insider,  'Insider') : '',
+    w.hedge    ? `<span style="font-size:9px;color:${hfSig2>=1?'#1e7e34':hfSig2<=-1?'#c62828':'#6b7280'};font-weight:${hfSig2>=2||hfSig2<=-2?'700':'400'};white-space:nowrap">${hfSig2>=2?'★ ':''}HF: ${w.hedge}</span>` : '',
+    w.inv_sent ? sentBadge(w.inv_sent, 'Investors') : '',
+    w.news_sent? sentBadge(w.news_sent,'News') : '',
   ].filter(Boolean).join(' &nbsp;');
 
-  // Most accurate analyst
   const analystRow = w.most_accurate && w.most_accurate !== 'null'
-    ? `<div style="font-size:9px;color:var(--text3);margin-top:3px">&#x1F3AF; ${w.most_accurate}</div>` : '';
+    ? `<div style="font-size:9px;color:var(--text3);margin-top:3px">🎯 ${w.most_accurate}</div>` : '';
 
   return `<div style="background:${actionBg};border:1px solid ${borderColor};border-radius:var(--r);padding:13px;box-shadow:var(--shadow);transition:box-shadow .15s" onmouseover="this.style.boxShadow='var(--shadow2)'" onmouseout="this.style.boxShadow='var(--shadow)'">
 
-    <!-- TOP: Ticker + Score + Action -->
+    <!-- HEADER: Ticker + Score -->
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:7px">
       <div>
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
@@ -2984,25 +3161,34 @@ function buyCardHTML(w) {
         <div style="font-size:9px;color:var(--text3)">${w.sector || '—'}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:20px;font-weight:800;color:${actionColor};line-height:1">${w.score}</div>
-        <div style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Buy Score</div>
+        <div style="font-size:22px;font-weight:800;color:${actionColor};line-height:1">${w.score}</div>
+        <div style="font-size:8px;color:var(--text3);letter-spacing:.04em;text-transform:uppercase">Buy Score</div>
         <div style="font-size:10px;font-weight:700;color:${actionColor}">${w.action}</div>
       </div>
     </div>
 
     <!-- SCORE BAR -->
-    <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:9px;overflow:hidden">
-      <div style="height:100%;width:${scoreWidth};background:${scoreColor};border-radius:2px;transition:width .4s"></div>
+    <div style="height:4px;background:#e5e7eb;border-radius:2px;margin-bottom:9px;overflow:hidden">
+      <div style="height:100%;width:${w.score}%;background:${scoreColor};border-radius:2px"></div>
     </div>
 
-    <!-- BADGES ROW -->
+    <!-- BADGES -->
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
-      ${w.ss != null ? `<span style="font-size:9px;font-weight:700;color:${ssColor};background:#f8f9fa;border:1px solid var(--border);border-radius:3px;padding:1px 5px">&#11088; SS ${w.ss}/10</span>` : ''}
+      ${w.ss != null ? `<span style="font-size:9px;font-weight:700;color:${ssColor};background:#f9fafb;border:1px solid #e5e7eb;border-radius:3px;padding:1px 5px">★ SS ${w.ss}/10</span>` : ''}
       ${['Strong Buy','Moderate Buy'].includes(w.consensus) ? `<span class="bdg ${w.consensus==='Strong Buy'?'b-sb':'b-mb'}" style="font-size:9px">${w.consensus}</span>` : ''}
-      ${w52tag}${volBadge}${epsBadge}${earnBadge}
+      ${w52Tag}${volBadge}${epsBadge}${earnBadge}${profitTag}
     </div>
 
-    <!-- KEY METRICS -->
+    <!-- AI ONLINE INDICATOR BADGES -->
+    ${rsiTag || siTag || peTag || amTag ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${rsiTag}${siTag}${peTag}${amTag}</div>` : ''}
+
+    <!-- 52-WEEK VISUAL BAR -->
+    ${w52Bar}
+
+    <!-- AI STRATEGY RATIONALE -->
+    ${strategyLine}
+
+    <!-- KEY METRICS GRID -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">
       <div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px">
         <div style="font-size:9px;color:var(--text3)">Current Price</div>
@@ -3010,11 +3196,10 @@ function buyCardHTML(w) {
       </div>
       <div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px">
         <div style="font-size:9px;color:var(--text3)">Analyst Target</div>
-        <div style="font-size:12px;font-weight:700;color:#0c8b7a">${w.target ? '$'+w.target.toFixed(2) : '—'} ${w.target_pct ? '<span style="font-size:9px;font-weight:600;color:#1e7e34">(+'+w.target_pct.toFixed(0)+'%)</span>' : ''}</div>
-      </div>
-      <div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px">
-        <div style="font-size:9px;color:var(--text3)">1-Year Return</div>
-        <div style="font-size:12px;font-weight:700;color:${oyColor}">${oyStr || '—'}</div>
+        <div style="font-size:12px;font-weight:700;color:#0c8b7a">
+          ${w.target ? '$'+w.target.toFixed(2) : '—'}
+          ${w.target_pct ? `<span style="font-size:9px;font-weight:600;color:#1e7e34">(+${w.target_pct.toFixed(0)}%)</span>` : ''}
+        </div>
       </div>
       <div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px">
         <div style="font-size:9px;color:var(--text3)">Market Cap</div>
@@ -3022,30 +3207,30 @@ function buyCardHTML(w) {
       </div>
       ${w.eps_forecast != null ? `<div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px">
         <div style="font-size:9px;color:var(--text3)">EPS Forecast</div>
-        <div style="font-size:12px;font-weight:700;color:var(--text)">$${w.eps_forecast.toFixed(2)} <span style="font-size:9px;color:var(--text3)">(prev $${w.eps_last_yr != null ? w.eps_last_yr.toFixed(2) : '—'})</span></div>
+        <div style="font-size:11px;font-weight:700;color:var(--text)">$${w.eps_forecast.toFixed(2)} <span style="font-size:9px;color:var(--text3)">${w.eps_last_yr!=null?'prev $'+w.eps_last_yr.toFixed(2):''}</span></div>
       </div>` : ''}
-      ${w.earn_date && w.earn_date !== 'null' ? `<div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px">
+      ${w.earn_date && w.earn_date !== 'null' ? `<div style="background:rgba(255,255,255,.6);border-radius:4px;padding:5px 7px;grid-column:${w.eps_forecast!=null?'auto':'1/-1'}">
         <div style="font-size:9px;color:var(--text3)">Earnings Date</div>
-        <div style="font-size:10px;font-weight:700;color:#e65100">${w.earn_date} ${w.earn_time && w.earn_time !== 'null' && w.earn_time !== 'TBA' ? '· '+w.earn_time : ''}</div>
+        <div style="font-size:10px;font-weight:700;color:#e65100">${w.earn_date}${w.earn_time&&w.earn_time!=='null'&&w.earn_time!=='TBA'?' · '+w.earn_time:''}</div>
       </div>` : ''}
     </div>
 
     <!-- SENTIMENT ROW -->
-    <div style="background:rgba(255,255,255,.5);border-radius:4px;padding:6px 8px;margin-bottom:7px;display:flex;gap:8px;flex-wrap:wrap">
-      ${sentRow || '<span style="font-size:9px;color:var(--text3)">No sentiment data</span>'}
+    <div style="background:rgba(255,255,255,.5);border-radius:4px;padding:5px 8px;margin-bottom:7px;display:flex;gap:8px;flex-wrap:wrap;font-size:9px">
+      ${sentRow || '<span style="color:var(--text3)">No sentiment data</span>'}
     </div>
 
     <!-- WHY BUY / FLAGS -->
-    ${w.reasons.length ? `<div style="font-size:10px;color:var(--text2);line-height:1.7;margin-bottom:4px">
-      ✅ ${w.reasons.join(' · ')}
-    </div>` : ''}
-    ${w.flags.length ? `<div style="font-size:10px;color:#e65100;line-height:1.6">
-      ⚠️ ${w.flags.join(' · ')}
-    </div>` : ''}
-    ${analystRow}
+    ${w.reasons.length ? `<div style="font-size:10px;color:var(--text2);line-height:1.7;margin-bottom:4px">✅ ${w.reasons.join(' · ')}</div>` : ''}
+    ${w.flags.length   ? `<div style="font-size:10px;color:#e65100;line-height:1.6">⚠️ ${w.flags.join(' · ')}</div>` : ''}
 
+    <!-- AI DETAILS (if fetched) -->
+    ${ai && ai.upside_thesis ? `<div style="font-size:10px;color:var(--text2);margin-top:6px;border-top:1px solid rgba(0,0,0,.06);padding-top:5px;line-height:1.6">${ai.upside_thesis}</div>` : ''}
+
+    ${analystRow}
   </div>`;
 }
+
 
 // Boot / refresh
 function initBuyTab() { renderBuyTab(); }
