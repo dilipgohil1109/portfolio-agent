@@ -750,10 +750,15 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
           <div class="src2-desc">Paste share links — works on phone. Links saved automatically.</div>
           <div class="src2-body" id="body-gdrive" style="display:none">
             <label>Portfolio CSV link <span class="gd-saved-badge" id="gdSavedPF">Saved</span></label>
-            <input type="url" id="gdPF" placeholder="https://drive.google.com/file/d/.../view" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
+            <input type="url" id="gdPF" placeholder="Google Sheet link OR GitHub raw URL (raw.githubusercontent.com/...)" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
             <label>TipRanks CSV link <span class="gd-saved-badge" id="gdSavedTR">Saved</span></label>
-            <input type="url" id="gdTR" placeholder="https://drive.google.com/file/d/.../view" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
-            <div style="font-size:10px;color:var(--text3);margin-top:5px">&#x2139; Share file → "Anyone with link can view" → Copy link</div>
+            <input type="url" id="gdTR" placeholder="Google Sheet link OR GitHub raw URL (raw.githubusercontent.com/...)" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
+            <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
+              &#x2139; <strong>Two options that work reliably:</strong><br>
+              &#x1F4C4; <strong>Option A (easiest):</strong> Upload CSV to Google Drive, open it as a Google Sheet (File → Save as Google Sheets), share → "Anyone with link can view" → copy link<br>
+              &#x1F4E6; <strong>Option B (most reliable):</strong> Put your CSV files in your GitHub repo and paste the raw GitHub URL (raw.githubusercontent.com/...)<br>
+              &#x26A0;&#xFE0F; Plain CSV files on Google Drive are now blocked by Google — use a Google Sheet or GitHub instead
+            </div>
           </div>
         </div>
 
@@ -1384,30 +1389,82 @@ function setFetchStatus(cls, msg) {
 }
 
 // ── GDRIVE FETCH ──────────────────────────────────────────────
-function gdriveLinkToDirectUrl(link) {
-  for (const p of [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/]) {
-    const m = link.match(p); if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+function gdriveLinkToUrls(link) {
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /[?&]id=([a-zA-Z0-9_-]+)/,
+    /\/d\/([a-zA-Z0-9_-]+)/,
+  ];
+  let fileId = null;
+  for (const p of patterns) {
+    const m = link.match(p);
+    if (m) { fileId = m[1]; break; }
   }
-  throw new Error('Cannot find file ID in this Google Drive link. Use the "Share → Copy link" button in Drive.');
+  if (!fileId) throw new Error('Cannot find file ID in this Google Drive link.');
+  return {
+    fileId,
+    classicUrl: `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`,
+  };
 }
 
-async function fetchViaProxy(url) {
+// Legacy compat
+function gdriveLinkToDirectUrl(link) {
+  return gdriveLinkToUrls(link).classicUrl;
+}
+
+async function fetchGDriveFile(link) {
+  // GitHub raw URL — fetch directly, no proxy needed
+  if (link.includes('raw.githubusercontent.com') ||
+      (link.includes('github.com/') && link.includes('/raw/'))) {
+    const rawUrl = link
+      .replace('github.com/', 'raw.githubusercontent.com/')
+      .replace('/blob/', '/');
+    const r = await fetch(rawUrl, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error('GitHub fetch failed: HTTP ' + r.status);
+    const t = await r.text();
+    if (t && t.length > 50) return t;
+    throw new Error('GitHub returned empty file');
+  }
+
+  // Google Drive — extract direct download URL then try 3 proxies
+  const directUrl = gdriveLinkToDirectUrl(link);
+
   const proxies = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   ];
+
   let lastErr = '';
   for (const pFn of proxies) {
     try {
-      const r = await fetch(pFn(url), { signal: AbortSignal.timeout(15000) });
-      if (!r.ok) continue;
+      const r = await fetch(pFn(directUrl), { signal: AbortSignal.timeout(15000) });
+      if (!r.ok) { lastErr = 'HTTP ' + r.status; continue; }
       const t = await r.text();
-      if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
-    } catch(e) { lastErr = e.message; }
+      // Valid CSV: has content, not an HTML error page
+      if (t && t.length > 100 &&
+          !t.trimStart().startsWith('<!DOCTYPE') &&
+          !t.trimStart().startsWith('<html')) {
+        return t;
+      }
+      lastErr = 'Got HTML page instead of CSV data';
+    } catch(e) {
+      lastErr = e.message;
+    }
   }
-  throw new Error('Google Drive fetch failed (tried 3 proxies). Ensure file is shared "Anyone with link can view" and is a plain CSV. ' + lastErr);
+
+  throw new Error(
+    'Google Drive fetch failed (tried 3 proxies). ' +
+    'Make sure the file is shared as "Anyone with link can view" and is a plain CSV file. ' +
+    'Last error: ' + lastErr
+  );
 }
+
+// Legacy alias used by older code paths
+async function fetchViaProxy(url) {
+  return fetchGDriveFile(url);
+}
+
 
 async function testGDriveLinks() {
   const el = document.getElementById('gdTestStatus');
@@ -1418,8 +1475,12 @@ async function testGDriveLinks() {
   const results = [];
   for (const [lbl, link] of [['Portfolio', pf], ['TipRanks', tr]]) {
     if (!link) continue;
-    try { const t = await fetchViaProxy(gdriveLinkToDirectUrl(link)); results.push(`✅ ${lbl}: ${t.length.toLocaleString()} bytes loaded OK`); }
-    catch(e) { results.push(`❌ ${lbl}: ${e.message.slice(0, 120)}`); }
+    try {
+      const t = await fetchGDriveFile(link);
+      results.push(`✅ ${lbl}: ${t.length.toLocaleString()} bytes loaded OK`);
+    } catch(e) {
+      results.push(`❌ ${lbl}: ${e.message.slice(0, 300)}`);
+    }
   }
   el.className = `gd-status show ${results.every(r => r.startsWith('✅')) ? 'ok' : 'err'}`;
   el.innerHTML = results.join('<br>');
@@ -1462,9 +1523,9 @@ async function fetchData() {
       if (!pfLink || !trLink) throw new Error('Paste both Google Drive links first.');
       saveGDriveLinks(); // persist immediately on fetch
       setFetchStatus('loading', '⏳ Fetching Portfolio from Google Drive…');
-      pfText = await fetchViaProxy(gdriveLinkToDirectUrl(pfLink));
+      pfText = await fetchGDriveFile(pfLink);
       setFetchStatus('loading', '⏳ Fetching TipRanks from Google Drive…');
-      trText = await fetchViaProxy(gdriveLinkToDirectUrl(trLink));
+      trText = await fetchGDriveFile(trLink);
       srcLabel = 'Google Drive';
     }
 
