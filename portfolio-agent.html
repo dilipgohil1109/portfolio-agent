@@ -805,8 +805,10 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
       <div class="ai-panel-prompt" id="aiPanelPrompt">
         <div class="prompt-flow">
           <div class="pf-row">
-            <select id="promptTicker2">
-              <option value="__ALL__">All holdings — full portfolio prompt</option>
+            <select id="promptTicker2" style="flex:1;min-width:180px">
+              <option value="__MASTER__">&#x2B50; Master Analysis (portfolio + watchlist + indicators)</option>
+              <option value="__ALL__">Portfolio only — all holdings strategy</option>
+              <option value="__EARNINGS__">Earnings AI analysis (dates auto-loaded from TipRanks)</option>
             </select>
             <button class="btn-gen" onclick="generatePrompt2()">&#x270F; Generate</button>
             <button class="btn-cprompt" onclick="copyPrompt2()">&#x1F4CB; Copy</button>
@@ -925,99 +927,22 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
   <!-- EARNINGS ALERT (next 10 days) -->
   <div class="panel">
     <div class="phdr" onclick="togglePanel('earnBody','earnTog')">
-      <h2>&#x1F4C5; Upcoming Earnings — Next 10 Days <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">buy/sell signal before earnings</span></h2>
+      <h2>&#x1F4C5; Upcoming Earnings — Next 10 Days
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">from TipRanks data · buy/sell signal · auto-updates on Run Analysis</span>
+      </h2>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="earn-counts" id="earnCounts"></div>
-        <span class="ptog" id="earnTog">&#x25B6;</span>
+        <span class="ptog" id="earnTog">&#x25BC;</span>
       </div>
     </div>
-    <div class="earn-body" id="earnBody">
-
-      <!-- MODE SELECTOR -->
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div class="aim-btn selected" id="earn-mode-prompt" onclick="selectEarnMode('prompt')" style="flex:1;min-width:160px">
-          <div class="aim-icon">&#x270F;&#xFE0F;</div>
-          <div class="aim-title">Prompt Mode</div>
-          <div class="aim-desc">Generate prompt → paste in Claude.ai or ChatGPT → paste JSON result back</div>
-          <div style="font-size:10px;color:var(--green);margin-top:3px;font-weight:600">&#x2705; Free — works in downloaded app</div>
-        </div>
-        <div class="aim-btn" id="earn-mode-api" onclick="selectEarnMode('api')" style="flex:1;min-width:160px">
-          <div class="aim-icon">&#x26A1;</div>
-          <div class="aim-title">API Mode</div>
-          <div class="aim-desc">Auto-scans using Anthropic API key (set in Step 2)</div>
-          <div style="font-size:10px;color:var(--blue);margin-top:3px;font-weight:600">Needs API key + credits</div>
-        </div>
+    <div class="earn-body open" id="earnBody">
+      <div id="earnNoData" style="color:var(--text3);font-size:12px;padding:14px;font-style:italic;display:none">
+        Run Analysis (Step 3) to load earnings dates from your TipRanks file.
       </div>
-
-      <!-- PROMPT MODE PANEL -->
-      <div id="earnPanelPrompt">
-        <div style="background:#f0f4ff;border:1px solid #b8ccf8;border-radius:var(--r2);padding:10px 13px;margin-bottom:10px;font-size:11px;color:#3b5bdb;line-height:1.7">
-          <strong>How it works:</strong> Click Generate &rarr; Copy the prompt &rarr; Open
-          <a href="https://claude.ai" target="_blank" style="color:#3b5bdb">Claude.ai</a> or
-          <a href="https://chat.openai.com" target="_blank" style="color:#3b5bdb">ChatGPT</a> &rarr;
-          Paste &amp; send &rarr; Copy the JSON response &rarr; Paste below &amp; Apply.
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
-          <button class="btn-earn-scan" onclick="generateEarningsPrompt()" style="background:linear-gradient(135deg,#3b5bdb,#7048e8)">&#x270F; Generate Earnings Prompt</button>
-          <button class="btn-test-links" onclick="copyEarningsPrompt()">&#x1F4CB; Copy Prompt</button>
-          <a href="https://claude.ai" target="_blank" class="ai-link">&#x1F4AC; Claude.ai</a>
-          <a href="https://chat.openai.com" target="_blank" class="ai-link">&#x1F916; ChatGPT</a>
-          <a href="https://gemini.google.com" target="_blank" class="ai-link">&#x2728; Gemini</a>
-        </div>
-        <textarea id="earnPromptOut" readonly placeholder="Click Generate Earnings Prompt to create a ready-to-copy prompt..."
-          style="width:100%;height:130px;border:1px solid var(--border);border-radius:var(--r2);padding:9px;font-size:11px;font-family:monospace;color:var(--text);background:var(--bg3);resize:vertical;outline:none;margin-bottom:8px"></textarea>
-        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">&#x1F4E5; Paste AI JSON response here:</div>
-        <textarea id="earnPasteIn" placeholder='Paste JSON array from AI here: [{"ticker":"AAPL","has_earnings":true,"earnings_date":"May 1 2026",...}]'
-          style="width:100%;height:80px;border:1px solid var(--border2);border-radius:var(--r2);padding:8px;font-size:11px;color:var(--text);resize:none;outline:none;background:#fff;margin-bottom:8px"></textarea>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn-apply" onclick="applyEarningsResponse()">&#x2705; Apply to Dashboard</button>
-          <span id="earnApplyStatus" style="font-size:11px"></span>
-        </div>
-      </div>
-
-      <!-- API MODE PANEL -->
-      <div id="earnPanelApi" style="display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;background:var(--bg3);border-radius:var(--r2);padding:8px 10px">
-          Uses the API key from Step 2. Make sure you have set it there first. Each full scan costs ~$0.10 in API credits.
-        </div>
-        <div class="earn-scan-bar">
-          <button class="btn-earn-scan" id="earnScanBtn" onclick="scanEarningsAPI()">&#x1F50D; Scan All Holdings via API</button>
-          <span class="earn-scan-st" id="earnScanSt">Searches earnings dates and buy/sell signals for all your holdings</span>
-        </div>
-        <div class="earn-prog" id="earnProg"><div class="earn-prog-fill" id="earnProgFill"></div></div>
-      </div>
-
-      <!-- RESULTS GRID (shared by both modes) -->
-      <div class="earn-grid" id="earnGrid" style="margin-top:10px">
-        <div class="earn-pend">&#x270F; Use Prompt Mode (free) or API Mode above to fetch earnings data.</div>
-      </div>
+      <div class="earn-prog" id="earnProg"><div class="earn-prog-fill" id="earnProgFill"></div></div>
+      <div class="earn-grid" id="earnGrid"></div>
     </div>
   </div>
-
-  <div class="panel">
-    <div class="phdr" onclick="togglePanel('ppBody','ppTog')">
-      <h2>&#x1F4B0; Profit Optimization</h2>
-      <div style="display:flex;align-items:center;gap:8px"><div class="pp-counts" id="ppCounts"></div><span class="ptog" id="ppTog">&#x25BC;</span></div>
-    </div>
-    <div class="pp-body open" id="ppBody"></div>
-  </div>
-
-  <div class="panel">
-    <div class="phdr" onclick="togglePanel('rdBody','rdTog')">
-      <h2>&#x1F6A8; Risk Dashboard</h2>
-      <div style="display:flex;align-items:center;gap:8px"><div class="rdc-row" id="rdcRow"></div><span class="ptog" id="rdTog">&#x25BC;</span></div>
-    </div>
-    <div class="rd-body open" id="rdBody"></div>
-  </div>
-
-  <div class="panel">
-    <div class="phdr" onclick="togglePanel('trBody','trTog')">
-      <h2>&#x1F3AF; TipRanks Analyst Targets <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">sorted by upside</span></h2>
-      <span class="ptog" id="trTog">&#x25B6;</span>
-    </div>
-    <div class="trp-body" id="trBody"></div>
-  </div>
-
 
   <!-- ═══ WATCHLIST BUY IDEAS ═══ -->
   <div class="panel">
@@ -1642,24 +1567,43 @@ const PF_SKIP = new Set(['Symbol','Symbol ','Exported on:','Selected account(s):
 const PF_SKIP_PFX = ['497','641','G57','NXTP'];
 
 function parsePortfolioCSV(text) {
-  const raw = {};
-  for (const line of text.replace(/\r/g, '').split('\n')) {
-    if (!line.trim() || line.trim() === ',') continue;
+  // Handles all 3 Merrill Edge CSV export variants:
+  // Fmt1(pre-2026): ' ,' delimited quoted fields, sym[0] rating[1] desc[2] qty[3] price[4] daychg[5] val[6] dayval[7] cost[8] gl[9]
+  // Fmt2(mid-2026): plain CSV, blank leading col, sym[1] qty[2] cost[3] basis[4] price[5] val[6] gl[7]
+  // Fmt3(Jun2026+): plain CSV, sym[0] rating[1] desc[2] qty[3] price[4] daychg[5] val[6] dayval$[7] cost[8] gl[9]
+  const raw   = {};
+  const lines = text.replace(/\r/g,'').split('\n');
+  const isOld = lines.slice(8,25).some(l => / ,"Buy | ,"Sell| ,"Hold| ,"Underperform/.test(l));
+  const hasBofA = !isOld && lines.slice(8,25).some(l => /,Buy \(|,Sell \(|,Underperform \(|,Neutral \(/.test(l));
+  const fmt = isOld ? 1 : hasBofA ? 3 : 2;
+  for (const line of lines) {
+    if (!line.trim() || line.trim().replace(/,/g,'').replace(/\s/g,'') === '') continue;
     const cols = parseCSVLine(line);
-    if (!cols || cols.length < 9) continue;
-    const sym = cols[0].replace(' !', '').trim();
-    if (!sym || PF_SKIP.has(sym)) continue;
+    if (!cols || cols.length < 3) continue;
+    const symIdx = (fmt === 2 && cols[0].trim() === '' && cols[1] && cols[1].trim()) ? 1 : 0;
+    const sym = cols[symIdx].replace(' !','').trim();
+    if (!sym || PF_SKIP.has(sym) || PF_SKIP.has(sym+' ')) continue;
     if (PF_SKIP_PFX.some(p => sym.startsWith(p))) continue;
-    if (sym.includes('Symbol') || sym.includes('$')) continue;
-    const qty = parseFloat(cols[3].replace(/,/g, ''));
-    if (isNaN(qty) || qty <= 0) continue;
-    const valNum = parseFloat(cols[6].replace(/[$,]/g, '')) || 0;
-    if (!raw[sym]) raw[sym] = { ticker: sym, rating: cols[1] || '--', desc: cols[2] || sym, qty: 0, value_num: 0, price: cols[4], unit_cost: cols[8], gl: cols.length > 9 ? cols[9] : 'N/A' };
-    raw[sym].qty       += qty;
-    raw[sym].value_num += valNum;
-    if (cols[1] && cols[1] !== '--') raw[sym].rating = cols[1];
-    raw[sym].price = cols[4];
-    if (cols.length > 9) raw[sym].gl = cols[9];
+    if (sym.includes('Symbol') || sym.startsWith('$')) continue;
+    let qtyIdx, price, unit_cost, value_str, gl, rating, desc;
+    if (fmt === 2) {
+      qtyIdx=symIdx+1; rating='--'; desc=sym;
+      unit_cost=cols[symIdx+2]||'--'; price=cols[symIdx+4]||'--';
+      value_str=cols[symIdx+5]||'--'; gl=cols[symIdx+6]||'N/A';
+    } else {
+      // fmt1 and fmt3 have same column layout (only delimiter differs)
+      qtyIdx=symIdx+3; rating=cols[symIdx+1]||'--'; desc=cols[symIdx+2]||sym;
+      price=cols[symIdx+4]||'--'; value_str=cols[symIdx+6]||'--';
+      unit_cost=cols[symIdx+8]||'--'; gl=cols[symIdx+9]||'N/A';
+    }
+    if (qtyIdx >= cols.length) continue;
+    const qty = parseFloat((cols[qtyIdx]||'').replace(/,/g,'').replace(/\$/g,''));
+    if (isNaN(qty)||qty<=0) continue;
+    const valNum = parseFloat((value_str||'').replace(/[$,\s]/g,'')) || 0;
+    if (!raw[sym]) raw[sym]={ticker:sym,rating,desc,qty:0,value_num:0,price,unit_cost,gl};
+    raw[sym].qty+=qty; raw[sym].value_num+=valNum;
+    if (rating&&rating!=='--') raw[sym].rating=rating;
+    raw[sym].price=price; raw[sym].gl=gl;
   }
   return raw;
 }
@@ -1805,6 +1749,54 @@ function buildPFFromSources(pfData, trData) {
   let totalGL = 0;
   holdings.forEach(h => { const m = h.unrealized_gl.match(/[\+\-]?\$([0-9,]+\.?\d*)/); if (m) { const sign = h.unrealized_gl.startsWith('-') ? -1 : 1; totalGL += sign * parseFloat(m[1].replace(/,/g, '')); } });
   const glSign2 = totalGL >= 0 ? '+' : ''; const glPct = totalVal > 0 ? (totalGL / (totalVal - totalGL)) * 100 : 0;
+  // ── POPULATE earningsCache FROM TIPRANKS DATA ─────────────────
+  // Clears old cache first so stale entries don't persist across loads
+  Object.keys(earningsCache).forEach(k => delete earningsCache[k]);
+  const today = new Date();
+  holdings.forEach(h => {
+    const ed = h.earn_date;
+    if (!ed || ed === 'null' || ed === 'nan') return;
+    try {
+      // TipRanks format: '11-Jun-26' → parse as DD-Mon-YY
+      const parts = ed.split('-');
+      const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+      const day = parseInt(parts[0]);
+      const mon = months[parts[1]];
+      const yr  = 2000 + parseInt(parts[2]);
+      const dt  = new Date(yr, mon, day);
+      const daysUntil = Math.round((dt - today) / 86400000);
+      if (daysUntil < -1) return; // skip past earnings
+
+      const epsF   = h.eps_forecast;
+      const epsL   = h.eps_last_yr;
+      let expectation = 'UNCERTAIN';
+      let signal      = 'WAIT';
+      if (epsF != null && epsL != null && epsL !== 0) {
+        const growth = (epsF - epsL) / Math.abs(epsL);
+        if (growth > 0.05)       { expectation = 'BEAT';    signal = daysUntil <= 10 ? 'BUY_BEFORE'  : 'WATCH'; }
+        else if (growth < -0.05) { expectation = 'MISS';    signal = daysUntil <= 10 ? 'SELL_BEFORE' : 'WAIT'; }
+        else                     { expectation = 'IN-LINE'; signal = 'HOLD'; }
+      }
+
+      earningsCache[h.ticker] = {
+        ticker:        h.ticker,
+        has_earnings:  true,
+        earnings_date: ed,
+        days_until:    daysUntil,
+        earnings_time: h.earn_time || 'TBA',
+        eps_estimate:  epsF != null ? '$' + epsF.toFixed(2) : 'N/A',
+        eps_prev_year: epsL != null ? '$' + epsL.toFixed(2) : 'N/A',
+        expectation,
+        signal,
+        rationale: expectation === 'BEAT'
+          ? `Analysts forecast EPS ${epsF!=null?'$'+epsF.toFixed(2):''} vs ${epsL!=null?'$'+epsL.toFixed(2):''} last year — beat expected.`
+          : expectation === 'MISS'
+          ? `Analysts forecast EPS ${epsF!=null?'$'+epsF.toFixed(2):''} vs ${epsL!=null?'$'+epsL.toFixed(2):''} last year — miss expected.`
+          : `Earnings ${ed}${h.earn_time && h.earn_time !== 'TBA' ? ' · '+h.earn_time : ''} — consensus in-line.`,
+      };
+    } catch(e) { /* skip unparseable dates */ }
+  });
+
   PF.holdings = holdings;
   PF.summary  = { count: holdings.length, total_value: '$' + totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), total_val_num: totalVal, total_gl: glSign2 + '$' + Math.abs(totalGL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), total_gl_pct: glSign2 + glPct.toFixed(1) + '%', gainers: holdings.filter(h => h.unrealized_gl.startsWith('+')).length, losers: holdings.filter(h => h.unrealized_gl.startsWith('-')).length, matched_tipranks: holdings.filter(h => h.in_tipranks).length };
 }
@@ -1828,7 +1820,7 @@ async function runAnalysis3() {
     setRunProg3(85); setRunSt3('loading', '⏳ Rendering dashboard…');
 
     // Rebuild dashboard panels
-    initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR(); initHead(); render(); buildAIDashboard(); initWatchlist(); initBuyTab(); initScanTab();
+    initKPIs(); buildNearTarget(); renderEarningsFromCache(); buildProfit(); buildRisk(); buildTR(); initHead(); render(); buildAIDashboard(); initWatchlist(); initBuyTab(); initScanTab();
     saveSession();
     setRunProg3(100);
 
@@ -1909,6 +1901,44 @@ Return JSON:
 {"action":"STRONG BUY|BUY|HOLD|REDUCE|SELL","conviction":"High|Medium|Low","risk_flag":true|false,"risk_level":"Critical|High|Medium|Low","summary":"2-3 sentence assessment including target proximity and earnings context","what_next":"Specific action with exact price levels and % to trim/sell","sell_reason":"If SELL/REDUCE/risk_flag: specific reason with numbers. Else empty.","catalysts":["c1","c2","c3"],"risks":["r1","r2","r3"],"earnings_note":"Exact earnings date, EPS estimate, and SELL_BEFORE or BUY_BEFORE signal"}`;
 }
 
+
+function makeMasterPrompt() {
+  if (!PF.holdings.length) return '\u26a0\ufe0f Load portfolio data first (complete Step 1).';
+  const today = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const prof  = document.getElementById('runProfile').value;
+  const hor   = document.getElementById('runHorizon').value;
+  const portLines = PF.holdings.map(h => {
+    const earn   = earningsCache[h.ticker];
+    const earnTag = earn ? `|EARNINGS:${earn.earnings_date}(${earn.expectation})` : '';
+    const tgtTag  = (h.up_f !== null && h.up_f <= 10) ? `|NEAR-TARGET:${h.upside_pct}` : '';
+    return `${h.ticker}|${h.description.replace(/ INC| CORP| COM| LTD/gi,'').trim()}|${h.qty}sh@${h.price}(cost ${h.unit_cost})|P&L:${h.unrealized_gl}|BofA:${h.bofa_rating}|TR:${h.tipranks_smartscore}/10 ${h.tipranks_consensus}|Target:${h.tipranks_target}(${h.upside_pct})${tgtTag}${earnTag}`;
+  }).join('\n');
+  const owned   = new Set(PF.holdings.map(h => h.ticker));
+  const wl      = TR_WATCHLIST.filter(w => !owned.has(w.ticker) && w.ss != null);
+  const wlLines = wl.map(w => `${w.ticker}|${w.name}|SS:${w.ss}/10|${w.consensus}|Target:${w.target}|${w.sector}`).join('\n');
+  const nearTgt = PF.holdings.filter(h => h.up_f !== null && h.up_f <= 10).map(h => `${h.ticker}(${h.upside_pct})`).join(', ');
+  const earnFlg = Object.keys(earningsCache).map(t => `${t}(${earningsCache[t].earnings_date}-${earningsCache[t].expectation})`).join(', ');
+  return `Today is ${today}. Profile: ${prof} | Horizon: ${hor}
+
+You are an expert portfolio strategist with web search. Run THREE tasks and return ONE JSON object with keys: "portfolio", "watchlist", "indicators".
+
+\u2550\u2550 TASK 1 \u2014 PORTFOLIO AI STRATEGY (${PF.holdings.length} holdings) \u2550\u2550
+${nearTgt ? `NEAR-TARGET (recommend SELL/REDUCE): ${nearTgt}` : ''}
+${earnFlg ? `EARNINGS NEXT 10 DAYS: ${earnFlg}` : ''}
+${portLines}
+
+\u2550\u2550 TASK 2 \u2014 TOP 20 WATCHLIST BUY IDEAS (from ${wl.length} candidates) \u2550\u2550
+${wlLines}
+Pick the 20 best. Search recent news for each.
+
+\u2550\u2550 TASK 3 \u2014 ONLINE INDICATORS (all portfolio + top 20 watchlist) \u2550\u2550
+For each ticker: RSI-14, short interest %, P/E vs sector, analyst momentum (last 30 days).
+
+RETURN FORMAT:
+{"portfolio":[{"ticker":"X","action":"BUY|HOLD|REDUCE|SELL|STRONG BUY","conviction":"High|Medium|Low","risk_flag":false,"risk_level":"Critical|High|Medium|Low","summary":"brief","what_next":"action with price levels","sell_reason":"","catalysts":["c1"],"risks":["r1"],"earnings_note":""}],"watchlist":[{"ticker":"X","score":8,"action":"STRONG_BUY|BUY|HOLD|SKIP","risk_level":"Low|Medium|High|Very High","speed":"Fast|Moderate|Slow","upside_thesis":"","risk":"","what_to_buy":"","earnings_note":"","news_summary":"","strategy_rationale":""}],"indicators":[{"ticker":"X","rsi":52,"short_interest_pct":1.2,"pe_vs_sector":"fair","analyst_momentum":"neutral"}]}
+Return ONLY the JSON object.`;
+}
+
 function makeFullPrompt() {
   if (!PF.holdings.length) return '⚠️ Load data first (complete Step 1).';
   const prof = document.getElementById('runProfile').value, hor = document.getElementById('runHorizon').value;
@@ -1950,8 +1980,13 @@ function generatePrompt2() {
     buildPFFromSources(pfD, trD);
     populatePromptTicker2();
   }
-  const ticker = document.getElementById('promptTicker2').value;
-  document.getElementById('promptOut').value = ticker === '__ALL__' ? makeFullPrompt() : makeHoldingPrompt(PF.holdings.find(x => x.ticker === ticker));
+  const val = document.getElementById('promptTicker2').value;
+  let txt;
+  if      (val === '__MASTER__')   txt = makeMasterPrompt();
+  else if (val === '__ALL__')      txt = makeFullPrompt();
+  else if (val === '__EARNINGS__') txt = makeEarningsPrompt();
+  else                             txt = makeHoldingPrompt(PF.holdings.find(x => x.ticker === val));
+  document.getElementById('promptOut').value = txt || '⚠️ Could not generate prompt.';
 }
 
 function copyPrompt2() {
@@ -1966,16 +2001,27 @@ function applyPasted() {
   if (!raw) { st.textContent = 'Paste AI response first.'; st.className = 'apply-status err'; return; }
   try {
     const js = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+    // MASTER RESPONSE — object with portfolio / watchlist / indicators keys
+    if (js && !Array.isArray(js) && (js.portfolio || js.watchlist || js.indicators)) {
+      let aiC=0,wlC=0,indC=0;
+      (js.portfolio||[]).forEach(r=>{if(r.ticker&&PF.holdings.find(h=>h.ticker===r.ticker)){aiCache[r.ticker]=r;aiC++;}});
+      (js.watchlist||[]).forEach(r=>{if(!r.ticker)return;wlAICache[r.ticker]={score:Number(r.score)||5,action:String(r.action||'HOLD').trim(),risk_level:String(r.risk_level||'Medium'),speed:String(r.speed||'Moderate'),upside_thesis:String(r.upside_thesis||''),risk:String(r.risk||''),what_to_buy:String(r.what_to_buy||''),earnings_note:String(r.earnings_note||''),news_summary:String(r.news_summary||''),strategy_rationale:String(r.strategy_rationale||'')};wlC++;});
+      (js.indicators||[]).forEach(r=>{if(!r.ticker)return;buySmartCache[r.ticker]={rsi:r.rsi??null,short_interest_pct:r.short_interest_pct??null,pe_vs_sector:r.pe_vs_sector??null,analyst_momentum:r.analyst_momentum??null,strategy_rationale:r.strategy_rationale??null};indC++;});
+      aiApplied=Object.keys(aiCache).length; updateStep3Hint();
+      render();buildRisk();buildTR();renderWatchlist();renderBuyTab();
+      setTimeout(()=>{buildAIDashboard();saveSession();updateSBIBadge(indC);},100);
+      st.textContent=`\u2705 Master Analysis \u2014 ${aiC} portfolio strategies, ${wlC} watchlist picks, ${indC} indicators loaded`;
+      st.className='apply-status ok'; return;
+    }
+    // STANDARD RESPONSE — plain array or single stock
     let applied = 0;
-    // Works even if PF.holdings is empty — just cache by ticker for later
     (Array.isArray(js) ? js : [js]).forEach(r => {
       if (r.ticker) { aiCache[r.ticker] = r; applied++; }
     });
     aiApplied = Object.keys(aiCache).length;
     updateStep3Hint();
-    st.textContent = `✅ ${applied} AI result${applied !== 1 ? 's' : ''} cached — they will load into the dashboard after Step 3.`;
+    st.textContent = `\u2705 ${applied} AI result${applied !== 1 ? 's' : ''} cached \u2014 load into dashboard after Step 3.`;
     st.className = 'apply-status ok';
-    // Immediately update AI Strategy tab and save
     setTimeout(() => { buildAIDashboard(); saveSession(); }, 100);
   } catch(e) { st.textContent = 'Parse error: ' + e.message.slice(0, 100); st.className = 'apply-status err'; }
 }
@@ -2245,7 +2291,7 @@ function buildNearTarget() {
 // SECTION 2: UPCOMING EARNINGS — PROMPT MODE + API MODE
 // Works in downloaded app via prompt copy/paste — no API needed
 // ═══════════════════════════════════════════════════════════════
-const earningsCache = {};
+const earningsCache = {};  // populated from TipRanks CSV data in buildPFFromSources
 
 // ── MODE SELECTOR ──────────────────────────────────────────────
 function selectEarnMode(mode) {
@@ -3467,7 +3513,7 @@ function clearSession() {
   Object.keys(wlAICache).forEach(k => delete wlAICache[k]);
   lastRunTime = null; lastFetchTime = null;
   aiApplied = 0; dataReady = false;
-  initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR();
+  initKPIs(); buildNearTarget(); renderEarningsFromCache(); buildProfit(); buildRisk(); buildTR();
   initHead(); render(); buildAIDashboard(); initWatchlist(); initBuyTab();
   updateRunBadge(); updateFetchBadge();
 }
@@ -4031,6 +4077,89 @@ function restoreScanCache() {
 function initScanTab() { restoreScanCache(); }
 
 
+
+// ═══════════════════════════════════════════════════════════════
+// EARNINGS — rendered directly from TipRanks data
+// earningsCache is populated in buildPFFromSources from TR CSV
+// No AI scan needed — data is accurate from your TipRanks export
+// ═══════════════════════════════════════════════════════════════
+function renderEarningsFromCache() {
+  const grid   = document.getElementById('earnGrid');
+  const counts = document.getElementById('earnCounts');
+  const noData = document.getElementById('earnNoData');
+  if (!grid) return;
+
+  const entries = Object.values(earningsCache).filter(e => e.has_earnings);
+
+  if (!entries.length) {
+    if (noData) noData.style.display = 'block';
+    grid.innerHTML = '';
+    if (counts) counts.innerHTML = '';
+    return;
+  }
+  if (noData) noData.style.display = 'none';
+
+  // Sort by days_until ascending (soonest first)
+  entries.sort((a, b) => (a.days_until || 99) - (b.days_until || 99));
+
+  // Filter to next 10 days for the panel
+  const next10 = entries.filter(e => e.days_until >= 0 && e.days_until <= 10);
+  const display = next10.length > 0 ? next10 : entries.filter(e => e.days_until >= 0).slice(0, 8);
+
+  const sellN  = display.filter(e => e.signal === 'SELL_BEFORE').length;
+  const buyN   = display.filter(e => e.signal === 'BUY_BEFORE').length;
+  const holdN  = display.filter(e => e.signal === 'HOLD' || e.signal === 'WAIT' || e.signal === 'WATCH').length;
+
+  if (counts) counts.innerHTML = [
+    sellN ? `<span class="ec ec-red">${sellN} Sell Before</span>`   : '',
+    buyN  ? `<span class="ec ec-green">${buyN} Buy Before</span>`   : '',
+    holdN ? `<span class="ec ec-amber">${holdN} Hold/Watch</span>`  : '',
+  ].filter(Boolean).join('');
+
+  grid.innerHTML = display.map(e => {
+    const h       = PF.holdings.find(x => x.ticker === e.ticker);
+    const cardCls = e.signal === 'SELL_BEFORE' ? 'earn-card-red'
+                  : e.signal === 'BUY_BEFORE'  ? 'earn-card-green'
+                  : e.signal === 'HOLD'         ? 'earn-card-amber'
+                  : 'earn-card-gray';
+    const sigCls  = e.signal === 'SELL_BEFORE' ? 'es-sell'
+                  : e.signal === 'BUY_BEFORE'  ? 'es-buy'
+                  : 'es-hold';
+    const sigLbl  = {
+      SELL_BEFORE: '\u26d4 SELL BEFORE EARNINGS',
+      BUY_BEFORE:  '\u2705 BUY / HOLD BEFORE EARNINGS',
+      HOLD:        '\u23f8 HOLD THROUGH EARNINGS',
+      WATCH:       '\uD83D\uDC41 WATCH \u2014 approaching earnings',
+      WAIT:        '\u23F3 UNCERTAIN \u2014 check further',
+    }[e.signal] || e.signal;
+
+    const urgCls  = e.days_until <= 1 ? 'color:#c62828;font-weight:700'
+                  : e.days_until <= 3 ? 'color:#e65100;font-weight:700'
+                  : 'color:var(--blue)';
+    const daysLbl = e.days_until <= 0 ? 'TODAY \u26a1'
+                  : e.days_until === 1 ? 'Tomorrow \u26a1'
+                  : `In ${e.days_until} days`;
+
+    return `<div class="earn-card ${cardCls}">
+      <div class="earn-top">
+        <span class="earn-tk" onclick="jumpTo('${e.ticker}')">${e.ticker}
+          <span style="font-size:9px;font-weight:400;color:var(--text3)">${h ? h.description.replace(/ INC| CORP| COM| LTD/gi,'').trim() : ''}</span>
+        </span>
+        <span class="earn-days" style="${urgCls}">${daysLbl}</span>
+      </div>
+      <div class="earn-date">\uD83D\uDCC5 ${e.earnings_date}${e.earnings_time && e.earnings_time !== 'TBA' ? ' \u00b7 ' + e.earnings_time : ''}</div>
+      <span class="earn-signal ${sigCls}">${sigLbl}</span>
+      <div class="earn-exp ${e.expectation === 'MISS' ? 'earn-exp-neg' : e.expectation === 'BEAT' ? 'earn-exp-pos' : 'earn-exp-neu'}" style="font-size:11px;margin:5px 0;font-weight:600">
+        Expectation: ${e.expectation}${e.eps_estimate !== 'N/A' ? ' \u00b7 EPS est: ' + e.eps_estimate : ''}${e.eps_prev_year !== 'N/A' ? ' (prev yr: ' + e.eps_prev_year + ')' : ''}
+      </div>
+      <div class="earn-rationale">${e.rationale}</div>
+      ${h ? `<div style="font-size:10px;color:var(--text3);margin-top:6px;border-top:1px solid var(--border);padding-top:5px">
+        Your position: ${h.value} \u00b7 P&L: ${h.unrealized_gl.split(' ').slice(0,2).join(' ')}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 // ── BOOT ──────────────────────────────────────────────────────
 (function bootApp() {
   // 1. Restore API key
@@ -4089,7 +4218,7 @@ function initScanTab() { restoreScanCache(); }
   }
 
   // 4. Render — if data was restored, dashboard fills immediately
-  initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR(); initHead(); render();
+  initKPIs(); buildNearTarget(); renderEarningsFromCache(); buildProfit(); buildRisk(); buildTR(); initHead(); render();
   buildAIDashboard(); initWatchlist(); initBuyTab();
 
   // 5. If GDrive links are saved AND no data yet, hint to fetch
