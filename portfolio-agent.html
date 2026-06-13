@@ -345,7 +345,7 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
 .seq-step.active .step-body,.seq-step.done .step-body{display:block}
 
 /* source cards in step 1 */
-.src-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.src-grid2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
 @media(max-width:600px){.src-grid2{grid-template-columns:1fr}}
 .src2{background:var(--bg3);border:2px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .18s;position:relative}
 .src2:hover{border-color:var(--blue);background:#eef2ff}
@@ -750,15 +750,31 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
           <div class="src2-desc">Paste share links — works on phone. Links saved automatically.</div>
           <div class="src2-body" id="body-gdrive" style="display:none">
             <label>Portfolio CSV link <span class="gd-saved-badge" id="gdSavedPF">Saved</span></label>
-            <input type="url" id="gdPF" placeholder="Google Sheet link OR GitHub raw URL (raw.githubusercontent.com/...)" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
+            <input type="url" id="gdPF" placeholder="https://drive.google.com/file/d/.../view" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
             <label>TipRanks CSV link <span class="gd-saved-badge" id="gdSavedTR">Saved</span></label>
-            <input type="url" id="gdTR" placeholder="Google Sheet link OR GitHub raw URL (raw.githubusercontent.com/...)" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
-            <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
-              &#x2139; <strong>Two options that work reliably:</strong><br>
-              &#x1F4C4; <strong>Option A (easiest):</strong> Upload CSV to Google Drive, open it as a Google Sheet (File → Save as Google Sheets), share → "Anyone with link can view" → copy link<br>
-              &#x1F4E6; <strong>Option B (most reliable):</strong> Put your CSV files in your GitHub repo and paste the raw GitHub URL (raw.githubusercontent.com/...)<br>
-              &#x26A0;&#xFE0F; Plain CSV files on Google Drive are now blocked by Google — use a Google Sheet or GitHub instead
+            <input type="url" id="gdTR" placeholder="https://drive.google.com/file/d/.../view" onclick="event.stopPropagation()" oninput="saveGDriveLinks()"/>
+            <div style="font-size:10px;color:var(--text3);margin-top:5px">&#x2139; Share file → "Anyone with link can view" → Copy link</div>
+          </div>
+        </div>
+
+        <!-- Dropbox -->
+        <div class="src2" id="src-onedrive" onclick="selectSource('onedrive')">
+          <div class="src2-icon">&#x1F4E6;</div>
+          <div class="src2-title">Dropbox ⭐ Recommended</div>
+          <div class="src2-desc">Most reliable cloud option — direct download, no CORS issues, works on any browser or phone.</div>
+          <div class="src2-body" id="body-onedrive" style="display:none">
+            <div style="background:#e8f0fe;border:1px solid #b8ccf8;border-radius:6px;padding:8px 10px;font-size:10px;color:#3b5bdb;margin-bottom:8px;line-height:1.6">
+              <strong>One-time setup:</strong><br>
+              1. Go to <a href="https://dropbox.com" target="_blank" onclick="event.stopPropagation()">dropbox.com</a> → upload both CSV files<br>
+              2. Click the <strong>Share</strong> button on each file<br>
+              3. Copy the link — it ends in <code>?dl=0</code><br>
+              4. Paste below — the app converts it to <code>dl=1</code> automatically
             </div>
+            <label>Portfolio CSV — Dropbox link <span class="gd-saved-badge" id="odSavedPF">Saved</span></label>
+            <input type="url" id="odPF" placeholder="https://www.dropbox.com/scl/fi/.../portfolio.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
+            <label>TipRanks CSV — Dropbox link <span class="gd-saved-badge" id="odSavedTR">Saved</span></label>
+            <input type="url" id="odTR" placeholder="https://www.dropbox.com/scl/fi/.../tipranks.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
+            <div style="font-size:10px;color:var(--text3);margin-top:5px">&#x2139; Free Dropbox account works. Update files daily by re-uploading — same link, fresh data.</div>
           </div>
         </div>
 
@@ -767,9 +783,11 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
       <div class="step1-actions" id="step1Actions" style="display:none">
         <button class="btn-fetch" id="fetchBtn" onclick="fetchData()">&#x2B07; Fetch &amp; Load Data</button>
         <button class="btn-test-links" id="testLinksBtn" onclick="testGDriveLinks()" style="display:none">&#x1F50D; Test Links</button>
+
         <span class="fetch-status" id="fetchStatus"></span>
       </div>
       <div class="gd-status" id="gdTestStatus" style="margin-top:8px"></div>
+
     </div>
   </div>
 
@@ -813,7 +831,7 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
             <select id="promptTicker2" style="flex:1;min-width:180px">
               <option value="__MASTER__">&#x2B50; Master Analysis (portfolio + watchlist + indicators)</option>
               <option value="__ALL__">Portfolio only — all holdings strategy</option>
-              <option value="__EARNINGS__">Earnings AI analysis (dates auto-loaded from TipRanks)</option>
+              <option value="__EARNINGS__">Upcoming earnings — next 10 days</option>
             </select>
             <button class="btn-gen" onclick="generatePrompt2()">&#x270F; Generate</button>
             <button class="btn-cprompt" onclick="copyPrompt2()">&#x1F4CB; Copy</button>
@@ -933,7 +951,7 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
   <div class="panel">
     <div class="phdr" onclick="togglePanel('earnBody','earnTog')">
       <h2>&#x1F4C5; Upcoming Earnings — Next 10 Days
-        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">from TipRanks data · buy/sell signal · auto-updates on Run Analysis</span>
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">auto-loaded from TipRanks · AI commentary from Master Analysis</span>
       </h2>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="earn-counts" id="earnCounts"></div>
@@ -941,8 +959,8 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
       </div>
     </div>
     <div class="earn-body open" id="earnBody">
-      <div id="earnNoData" style="color:var(--text3);font-size:12px;padding:14px;font-style:italic;display:none">
-        Run Analysis (Step 3) to load earnings dates from your TipRanks file.
+      <div id="earnNoData" style="color:var(--text3);font-size:12px;padding:14px;font-style:italic">
+        Run Analysis (Step 3) to load earnings from your TipRanks file. Apply the Master Analysis prompt to add AI commentary.
       </div>
       <div class="earn-prog" id="earnProg"><div class="earn-prog-fill" id="earnProgFill"></div></div>
       <div class="earn-grid" id="earnGrid"></div>
@@ -961,34 +979,11 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
       </div>
     </div>
     <div class="wl-body" id="wlBody">
-
-      <!-- HOW TO USE -->
-      <div class="wl-prompt-box">
-        <strong>How to get AI analysis:</strong> Click Generate Prompt &rarr; copy &rarr; paste into
-        <a href="https://claude.ai" target="_blank" style="color:#3b5bdb">Claude.ai</a> or
-        <a href="https://chat.openai.com" target="_blank" style="color:#3b5bdb">ChatGPT</a> &rarr;
-        paste JSON response back &rarr; Apply. The prompt includes your full portfolio so the AI avoids duplicate sectors and over-concentration.
+      <div style="font-size:11px;color:#3b5bdb;background:#f0f4ff;border:1px solid #b8ccf8;border-radius:var(--r2);padding:9px 12px;margin-bottom:12px;line-height:1.7">
+        &#x1F4A1; <strong>Watchlist AI analysis</strong> is included in the
+        <strong>&#x2B50; Master Analysis</strong> prompt (Data Source tab → Step 2).
+        Run that once to load buy ideas, upside thesis, risk and scores for all watchlist stocks.
       </div>
-
-      <!-- GENERATE + COPY -->
-      <div class="wl-action-row">
-        <button class="btn-gen" onclick="generateWatchlistPrompt()">&#x270F; Generate Watchlist Prompt</button>
-        <button class="btn-cprompt" onclick="copyWatchlistPrompt()">&#x1F4CB; Copy</button>
-        <a href="https://claude.ai" target="_blank" class="ai-link">&#x1F4AC; Claude.ai</a>
-        <a href="https://chat.openai.com" target="_blank" class="ai-link">&#x1F916; ChatGPT</a>
-        <a href="https://gemini.google.com" target="_blank" class="ai-link">&#x2728; Gemini</a>
-      </div>
-      <textarea id="wlPromptOut" class="wl-textarea" readonly placeholder="Click Generate Watchlist Prompt to create the analysis prompt..."></textarea>
-
-      <!-- PASTE RESPONSE -->
-      <div class="wl-paste-lbl">&#x1F4E5; Paste AI JSON response here:</div>
-      <textarea id="wlPasteIn" class="wl-paste" placeholder='[{"ticker":"AMAT","score":9,"action":"BUY","risk_level":"Low","speed":"Fast","upside_thesis":"...","risk":"...","what_to_buy":"...","earnings_note":"...","news_summary":"..."}]'></textarea>
-      <div class="wl-apply-row">
-        <button class="btn-apply" onclick="applyWatchlistResponse()">&#x2705; Apply to Watchlist</button>
-        <span id="wlApplyStatus" class="wl-status"></span>
-      </div>
-
-      <!-- FILTER + SEARCH -->
       <div class="wl-ctrl">
         <div class="wl-search-wrap">
           <span class="wl-si">&#x1F50D;</span>
@@ -1074,6 +1069,39 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
     </div>
   </div>
 
+  <!-- PROFIT OPTIMIZATION -->
+  <div class="panel">
+    <div class="phdr" onclick="togglePanel('ppBody','ppTog')">
+      <h2>&#x1F4B0; Profit Optimization</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="ppCounts"></div>
+        <span class="ptog" id="ppTog">&#x25BC;</span>
+      </div>
+    </div>
+    <div class="nt-body open" id="ppBody"></div>
+  </div>
+
+  <!-- RISK -->
+  <div class="panel">
+    <div class="phdr" onclick="togglePanel('rdBody','rdTog')">
+      <h2>&#x26A0;&#xFE0F; Risk Monitor</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="rdcRow"></div>
+        <span class="ptog" id="rdTog">&#x25BC;</span>
+      </div>
+    </div>
+    <div class="nt-body open" id="rdBody"></div>
+  </div>
+
+  <!-- TIPRANKS TABLE -->
+  <div class="panel">
+    <div class="phdr" onclick="togglePanel('trBody','trTog')">
+      <h2>&#x1F4CA; TipRanks Overview</h2>
+      <span class="ptog" id="trTog">&#x25BC;</span>
+    </div>
+    <div id="trBody"></div>
+  </div>
+
   <!-- STRATEGY DASHBOARD (shown when aiCache has entries) -->
   <div id="aiDashContent" style="display:none">
 
@@ -1132,38 +1160,9 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
   </div>
 
   <!-- ONLINE INDICATORS PROMPT PANEL (optional — collapses after use) -->
-  <div class="sbi-panel" id="sbiPanel">
-    <div class="sbi-hdr">
-      <div class="sbi-title">&#x1F4F6; Online Indicators
-        <span class="sbi-loaded" id="sbiLoadedBadge"></span>
-      </div>
-      <button class="sbi-toggle" onclick="toggleSBIPanel()" id="sbiToggleBtn">hide ▲</button>
-    </div>
-    <div id="sbiPanelBody">
-      <div class="sbi-desc">
-        <strong>Optional — scores work without this.</strong> Generate a prompt → paste into
-        <a href="https://claude.ai" target="_blank" style="color:var(--blue)">Claude.ai</a> or
-        <a href="https://chat.openai.com" target="_blank" style="color:var(--blue)">ChatGPT</a> →
-        paste JSON back → scores update with live RSI, short interest, P/E vs sector &amp; analyst momentum.
-        Run weekly for freshest signals.
-      </div>
-      <div class="sbi-actions">
-        <button class="btn-gen" onclick="generateSBIPrompt()">&#x270F; Generate Indicators Prompt</button>
-        <button class="btn-cprompt" onclick="copySBIPrompt()">&#x1F4CB; Copy</button>
-        <a href="https://claude.ai" target="_blank" class="ai-link">&#x1F4AC; Claude.ai</a>
-        <a href="https://chat.openai.com" target="_blank" class="ai-link">&#x1F916; ChatGPT</a>
-        <span class="sbi-status" id="sbiGenStatus"></span>
-      </div>
-      <textarea class="sbi-textarea" id="sbiPromptOut" readonly placeholder="Click Generate to create the online indicators prompt..."></textarea>
-      <div class="sbi-paste-row">
-        <div class="sbi-paste-lbl">&#x1F4E5; Paste AI JSON response here:</div>
-        <textarea class="sbi-paste-in" id="sbiPasteIn" placeholder='[{"ticker":"NVDA","rsi":58,"short_interest_pct":1.2,"pe_vs_sector":"expensive","analyst_momentum":"upgrades","strategy_rationale":"..."}]'></textarea>
-      </div>
-      <div class="sbi-apply-row">
-        <button class="btn-apply" onclick="applySBIResponse()">&#x2705; Apply — Update Scores</button>
-        <span class="sbi-status" id="sbiApplyStatus"></span>
-      </div>
-    </div>
+  <div style="font-size:11px;color:#3b5bdb;background:#f0f4ff;border:1px solid #b8ccf8;border-radius:var(--r2);padding:9px 13px;margin-bottom:12px">
+    &#x1F4F6; <strong>Online indicators</strong> (RSI, short interest, P/E, analyst momentum) are included in the <strong>&#x2B50; Master Analysis</strong> prompt (Data Source tab → Step 2). Apply it to update scores with live market data.
+    <span id="sbiLoadedBadge" class="sbi-loaded" style="margin-left:8px"></span>
   </div>
 
   <!-- STRATEGY PILLS -->
@@ -1333,14 +1332,17 @@ function selectSource(src) {
   document.querySelectorAll('.src2').forEach(c => c.classList.remove('selected'));
   document.getElementById('src-' + src).classList.add('selected');
   // Show/hide bodies
-  ['desktop','gdrive'].forEach(s => {
-    document.getElementById('body-' + s).style.display = s === src ? 'block' : 'none';
+  ['desktop','gdrive','onedrive'].forEach(s => {
+    const el = document.getElementById('body-' + s);
+    if (el) el.style.display = s === src ? 'block' : 'none';
   });
-  // Show actions area + conditionally show test button
+  // Show actions area + conditionally show test/download buttons
   document.getElementById('step1Actions').style.display = 'flex';
-  document.getElementById('testLinksBtn').style.display  = src === 'gdrive' ? 'inline-flex' : 'none';
+  document.getElementById('testLinksBtn').style.display     = (src === 'gdrive' || src === 'onedrive') ? 'inline-flex' : 'none';
+
   // Update fetch button label
-  document.getElementById('fetchBtn').textContent = src === 'gdrive' ? '⬇ Fetch from Google Drive' : '⬆ Load Files';
+  const labels = { gdrive: '⬇ Fetch from Google Drive', onedrive: '⬇ Fetch from Dropbox', desktop: '⬆ Load Files' };
+  document.getElementById('fetchBtn').textContent = labels[src] || '⬆ Load Files';
   setFetchStatus('', '');
 }
 
@@ -1353,6 +1355,28 @@ function onFileSelected(type, inp) {
 
 // ── GDRIVE LINK PERSISTENCE ───────────────────────────────────
 // Links saved to localStorage so they survive page reloads and downloads
+
+function saveODriveLinks() {
+  const pf = document.getElementById('odPF').value.trim();
+  const tr = document.getElementById('odTR').value.trim();
+  try {
+    if (pf) { localStorage.setItem('pf_od_pf', pf); showSavedBadge('odSavedPF', true); }
+    if (tr) { localStorage.setItem('pf_od_tr', tr); showSavedBadge('odSavedTR', true); }
+  } catch(e) {}
+}
+
+function loadSavedODriveLinks() {
+  try {
+    const pf = localStorage.getItem('pf_od_pf');
+    const tr = localStorage.getItem('pf_od_tr');
+    if (pf) { document.getElementById('odPF').value = pf; showSavedBadge('odSavedPF', true); }
+    if (tr) { document.getElementById('odTR').value = tr; showSavedBadge('odSavedTR', true); }
+    if (pf && tr) {
+      selectSource('onedrive');
+      setFetchStatus('', '↑ Saved OneDrive links loaded — click Fetch to load');
+    }
+  } catch(e) {}
+}
 
 function saveGDriveLinks() {
   const pf = document.getElementById('gdPF').value.trim();
@@ -1389,98 +1413,198 @@ function setFetchStatus(cls, msg) {
 }
 
 // ── GDRIVE FETCH ──────────────────────────────────────────────
-function gdriveLinkToUrls(link) {
-  const patterns = [
-    /\/file\/d\/([a-zA-Z0-9_-]+)/,
-    /[?&]id=([a-zA-Z0-9_-]+)/,
-    /\/d\/([a-zA-Z0-9_-]+)/,
-  ];
-  let fileId = null;
-  for (const p of patterns) {
-    const m = link.match(p);
-    if (m) { fileId = m[1]; break; }
-  }
-  if (!fileId) throw new Error('Cannot find file ID in this Google Drive link.');
-  return {
-    fileId,
-    classicUrl: `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`,
-  };
-}
-
-// Legacy compat
 function gdriveLinkToDirectUrl(link) {
-  return gdriveLinkToUrls(link).classicUrl;
+  const pats = [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/];
+  for (const p of pats) { const m = link.match(p); if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`; }
+  throw new Error('Cannot find file ID in this Google Drive link. Use the "Share" link from Drive.');
 }
 
-async function fetchGDriveFile(link) {
-  // GitHub raw URL — fetch directly, no proxy needed
-  if (link.includes('raw.githubusercontent.com') ||
-      (link.includes('github.com/') && link.includes('/raw/'))) {
-    const rawUrl = link
-      .replace('github.com/', 'raw.githubusercontent.com/')
-      .replace('/blob/', '/');
-    const r = await fetch(rawUrl, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) throw new Error('GitHub fetch failed: HTTP ' + r.status);
-    const t = await r.text();
-    if (t && t.length > 50) return t;
-    throw new Error('GitHub returned empty file');
+// ── ONEDRIVE SUPPORT ──────────────────────────────────────────────────────
+function onedriveLinkToDirectUrl(link) {
+  // OneDrive share links can be converted to direct download
+  // Format: https://onedrive.live.com/...  or  https://1drv.ms/...
+  // Direct download: append ?download=1 to the embed/view link
+  if (link.includes('1drv.ms') || link.includes('onedrive.live.com') || link.includes('sharepoint.com')) {
+    // Convert to direct download by replacing /view with /download or adding download=1
+    let direct = link
+      .replace('?ithint=', '?download=1&ithint=') // 1drv.ms share links
+      .replace('/view?', '/download?')
+      .replace('/edit?', '/download?');
+    if (!direct.includes('download')) direct += (direct.includes('?') ? '&' : '?') + 'download=1';
+    return direct;
+  }
+  throw new Error('Not a recognized OneDrive link');
+}
+
+function isOneDriveLink(link) {
+  return link.includes('dropbox.com') || link.includes('dropboxusercontent.com') ||
+         link.includes('1drv.ms') || link.includes('onedrive.live.com') || link.includes('sharepoint.com');
+}
+
+async function fetchOneDriveCSV(link) {
+  // Dropbox: convert share link (dl=0) to direct download (dl=1)
+  // Dropbox dl=1 links serve files with proper CORS headers — no proxy needed.
+  let url = link.trim();
+
+  // Convert dl=0 → dl=1, or add dl=1 if missing
+  if (url.includes('dropbox.com') || url.includes('dropboxusercontent.com')) {
+    url = url.replace(/[?&]dl=0/, '').replace(/[?&]dl=1/, '');  // strip existing dl param
+    url = url.includes('?') ? url + '&dl=1' : url + '?dl=1';
+    // Also convert www.dropbox.com to dl.dropboxusercontent.com for direct download
+    url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=1','').replace('&dl=1','');
   }
 
-  // Google Drive — extract direct download URL then try 3 proxies
-  const directUrl = gdriveLinkToDirectUrl(link);
+  // Strategy 1: Direct fetch (Dropbox has CORS headers — should work)
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (r.ok) {
+      const t = await r.text();
+      if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
+    }
+  } catch(e) { /* try with dl=1 param version */ }
 
+  // Strategy 2: dl=1 param version as fallback
+  const dlUrl = link.includes('?') ? link.replace(/dl=\d/,'dl=1') + (link.includes('dl=') ? '' : '&dl=1') : link + '?dl=1';
+  try {
+    const r = await fetch(dlUrl, { signal: AbortSignal.timeout(15000) });
+    if (r.ok) {
+      const t = await r.text();
+      if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
+    }
+  } catch(e) {}
+
+  // Strategy 3: CORS proxies as last resort
+  const proxies = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  ];
+  for (const pFn of proxies) {
+    try {
+      const r = await fetch(pFn(dlUrl), { signal: AbortSignal.timeout(12000) });
+      if (r.ok) {
+        const t = await r.text();
+        if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
+      }
+    } catch(e) {}
+  }
+
+  return null;
+}
+
+async function fetchGDriveCSV(fileId) {
+  // Google Drive now requires browser auth cookies to download.
+  // Strategy 1: Direct browser fetch WITH Google session cookie (works if user is logged in)
+  const urls = [
+    `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0`,
+    `https://drive.google.com/uc?export=download&id=${fileId}`,
+  ];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { credentials: 'include', signal: AbortSignal.timeout(12000) });
+      if (r.ok) {
+        const t = await r.text();
+        if (t && t.length > 50 && !t.startsWith('<!DOCTYPE') && !t.startsWith('<html')) return t;
+      }
+    } catch(e) { /* try next */ }
+  }
+  // Strategy 2: CORS proxies
   const proxies = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   ];
-
-  let lastErr = '';
   for (const pFn of proxies) {
-    try {
-      const r = await fetch(pFn(directUrl), { signal: AbortSignal.timeout(15000) });
-      if (!r.ok) { lastErr = 'HTTP ' + r.status; continue; }
-      const t = await r.text();
-      // Valid CSV: has content, not an HTML error page
-      if (t && t.length > 100 &&
-          !t.trimStart().startsWith('<!DOCTYPE') &&
-          !t.trimStart().startsWith('<html')) {
-        return t;
-      }
-      lastErr = 'Got HTML page instead of CSV data';
-    } catch(e) {
-      lastErr = e.message;
+    for (const url of urls) {
+      try {
+        const r = await fetch(pFn(url), { signal: AbortSignal.timeout(12000) });
+        if (r.ok) {
+          const t = await r.text();
+          if (t && t.length > 50 && !t.startsWith('<!DOCTYPE') && !t.startsWith('<html')) return t;
+        }
+      } catch(e) { /* try next */ }
     }
   }
-
-  throw new Error(
-    'Google Drive fetch failed (tried 3 proxies). ' +
-    'Make sure the file is shared as "Anyone with link can view" and is a plain CSV file. ' +
-    'Last error: ' + lastErr
-  );
+  return null; // all failed
 }
 
-// Legacy alias used by older code paths
 async function fetchViaProxy(url) {
-  return fetchGDriveFile(url);
+  // Extract file ID from the URL and use fetchGDriveCSV
+  const m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) {
+    const result = await fetchGDriveCSV(m[1]);
+    if (result) return result;
+    throw new Error('Google Drive fetch failed. Google requires browser sign-in. Switch to the Dropbox source for reliable access without authentication.');
+  }
+  throw new Error('Invalid Google Drive URL');
 }
 
+async function fetchGDriveFile(link) {
+  // Handle Dropbox links
+  if (isOneDriveLink(link)) {
+    const result = await fetchOneDriveCSV(link);
+    if (result) return result;
+    throw new Error('Dropbox fetch failed. Make sure the file is shared as "Anyone with the link" and is a plain CSV.');
+  }
+  // Handle Google Drive links
+  const pats = [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/];
+  let fileId = null;
+  for (const p of pats) { const m = link.match(p); if (m) { fileId = m[1]; break; } }
+  if (!fileId) throw new Error('Cannot find file ID. Use the Share link from Google Drive.');
+  const result = await fetchGDriveCSV(fileId);
+  if (result) return result;
+  throw new Error('Google Drive fetch failed. Google requires browser sign-in to download files. Switch to the Dropbox source instead — it works reliably without authentication.');
+}
+
+
+function openDirectDownload() {
+  const pfInp = document.getElementById('gdPF');
+  const trInp = document.getElementById('gdTR');
+  const box   = document.getElementById('gdDirectLinks');
+  const pfEl  = document.getElementById('gdDirectPF');
+  const trEl  = document.getElementById('gdDirectTR');
+  if (!box || !pfEl || !trEl) return;
+  const pf = pfInp ? pfInp.value.trim() : '';
+  const tr = trInp ? trInp.value.trim() : '';
+  if (!pf && !tr) return;
+  box.style.display = 'block';
+  const makeLink = (link, label) => {
+    try {
+      const pats = [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/];
+      let id = null;
+      for (const p of pats) { const m = link.match(p); if (m) { id = m[1]; break; } }
+      if (!id) throw new Error('Cannot find file ID');
+      const url = `https://drive.usercontent.google.com/download?id=${id}&export=download&authuser=0`;
+      return `<strong>${label}:</strong> <a href="${url}" target="_blank" style="color:#3b5bdb;text-decoration:none;font-weight:600">⬇ Download ${label} CSV ↗</a>`;
+    } catch(e) { return `<span style="color:#c62828">${label}: invalid link</span>`; }
+  };
+  if (pf) pfEl.innerHTML = makeLink(pf, 'Portfolio');
+  if (tr) trEl.innerHTML = makeLink(tr, 'TipRanks');
+}
 
 async function testGDriveLinks() {
   const el = document.getElementById('gdTestStatus');
   el.className = 'gd-status show loading'; el.textContent = '⏳ Testing links…';
-  const pf = document.getElementById('gdPF').value.trim();
-  const tr = document.getElementById('gdTR').value.trim();
-  if (!pf && !tr) { el.className='gd-status show err'; el.textContent = 'Paste links first.'; return; }
+  el.style.display = 'block';
+
+  let pfLink, trLink, isOD = false;
+  if (activeSource === 'onedrive') {
+    pfLink = document.getElementById('odPF').value.trim();
+    trLink = document.getElementById('odTR').value.trim();
+    isOD = true;
+  } else {
+    pfLink = document.getElementById('gdPF').value.trim();
+    trLink = document.getElementById('gdTR').value.trim();
+  }
+
+  if (!pfLink && !trLink) { el.className='gd-status show err'; el.textContent = 'Paste links first.'; return; }
   const results = [];
-  for (const [lbl, link] of [['Portfolio', pf], ['TipRanks', tr]]) {
+  for (const [lbl, link] of [['Portfolio', pfLink], ['TipRanks', trLink]]) {
     if (!link) continue;
     try {
-      const t = await fetchGDriveFile(link);
-      results.push(`✅ ${lbl}: ${t.length.toLocaleString()} bytes loaded OK`);
-    } catch(e) {
-      results.push(`❌ ${lbl}: ${e.message.slice(0, 300)}`);
-    }
+      const t = isOD ? await fetchOneDriveCSV(link) : await fetchGDriveFile(link);
+      if (t) results.push(`✅ ${lbl}: ${t.length.toLocaleString()} bytes loaded OK`);
+      else   results.push(`❌ ${lbl}: fetch returned empty — check sharing settings`);
+    } catch(e) { results.push(`❌ ${lbl}: ${e.message.slice(0, 120)}`); }
   }
   el.className = `gd-status show ${results.every(r => r.startsWith('✅')) ? 'ok' : 'err'}`;
   el.innerHTML = results.join('<br>');
@@ -1521,12 +1645,26 @@ async function fetchData() {
       const pfLink = document.getElementById('gdPF').value.trim();
       const trLink = document.getElementById('gdTR').value.trim();
       if (!pfLink || !trLink) throw new Error('Paste both Google Drive links first.');
-      saveGDriveLinks(); // persist immediately on fetch
+      saveGDriveLinks();
       setFetchStatus('loading', '⏳ Fetching Portfolio from Google Drive…');
       pfText = await fetchGDriveFile(pfLink);
       setFetchStatus('loading', '⏳ Fetching TipRanks from Google Drive…');
       trText = await fetchGDriveFile(trLink);
       srcLabel = 'Google Drive';
+    }
+
+    if (activeSource === 'onedrive') {
+      const pfLink = document.getElementById('odPF').value.trim();
+      const trLink = document.getElementById('odTR').value.trim();
+      if (!pfLink || !trLink) throw new Error('Paste both OneDrive links first.');
+      saveODriveLinks();
+      setFetchStatus('loading', '⏳ Fetching Portfolio from OneDrive…');
+      pfText = await fetchOneDriveCSV(pfLink);
+      if (!pfText) throw new Error('Dropbox fetch failed for Portfolio. Make sure you copied the share link from Dropbox (should contain dropbox.com). Check that sharing is set to "Anyone with this link".');
+      setFetchStatus('loading', '⏳ Fetching TipRanks from OneDrive…');
+      trText = await fetchOneDriveCSV(trLink);
+      if (!trText) throw new Error('Dropbox fetch failed for TipRanks. Make sure you copied the share link from Dropbox (should contain dropbox.com). Check that sharing is set to "Anyone with this link".');
+      srcLabel = 'OneDrive';
     }
 
     // Quick validation parse
@@ -1881,7 +2019,7 @@ async function runAnalysis3() {
     setRunProg3(85); setRunSt3('loading', '⏳ Rendering dashboard…');
 
     // Rebuild dashboard panels
-    initKPIs(); buildNearTarget(); renderEarningsFromCache(); buildProfit(); buildRisk(); buildTR(); initHead(); render(); buildAIDashboard(); initWatchlist(); initBuyTab(); initScanTab();
+    initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR(); initHead(); render(); buildAIDashboard(); initWatchlist(); initBuyTab(); initScanTab();
     saveSession();
     setRunProg3(100);
 
@@ -1981,25 +2119,31 @@ function makeMasterPrompt() {
   const earnFlg = Object.keys(earningsCache).map(t => `${t}(${earningsCache[t].earnings_date}-${earningsCache[t].expectation})`).join(', ');
   return `Today is ${today}. Profile: ${prof} | Horizon: ${hor}
 
-You are an expert portfolio strategist with web search. Run THREE tasks and return ONE JSON object with keys: "portfolio", "watchlist", "indicators".
+You are an expert portfolio strategist with web search. Run FOUR tasks and return ONE JSON object.
 
 \u2550\u2550 TASK 1 \u2014 PORTFOLIO AI STRATEGY (${PF.holdings.length} holdings) \u2550\u2550
-${nearTgt ? `NEAR-TARGET (recommend SELL/REDUCE): ${nearTgt}` : ''}
-${earnFlg ? `EARNINGS NEXT 10 DAYS: ${earnFlg}` : ''}
+${nearTgt ? 'NEAR-TARGET (consider SELL/REDUCE): ' + nearTgt : ''}
 ${portLines}
 
-\u2550\u2550 TASK 2 \u2014 TOP 20 WATCHLIST BUY IDEAS (from ${wl.length} candidates) \u2550\u2550
+\u2550\u2550 TASK 2 \u2014 EARNINGS AI COMMENTARY \u2550\u2550
+${earnFlg ? 'Holdings with earnings next 10 days (dates/signals from TipRanks data): ' + earnFlg + '\nFor each: search analyst EPS estimates, recent guidance, warnings. Add 2-3 sentences of AI commentary on whether the signal looks right and what to watch for.' : 'No upcoming earnings in next 10 days \u2014 return "earnings":[]'}
+
+\u2550\u2550 TASK 3 \u2014 TOP 20 WATCHLIST BUY IDEAS (from ${wl.length} candidates) \u2550\u2550
 ${wlLines}
 Pick the 20 best. Search recent news for each.
 
-\u2550\u2550 TASK 3 \u2014 ONLINE INDICATORS (all portfolio + top 20 watchlist) \u2550\u2550
-For each ticker: RSI-14, short interest %, P/E vs sector, analyst momentum (last 30 days).
+\u2550\u2550 TASK 4 \u2014 ONLINE INDICATORS (all portfolio + top 20 watchlist tickers) \u2550\u2550
+For each ticker search: RSI-14 value, short interest %, P/E vs sector average, net analyst upgrades/downgrades last 30 days.
 
-RETURN FORMAT:
-{"portfolio":[{"ticker":"X","action":"BUY|HOLD|REDUCE|SELL|STRONG BUY","conviction":"High|Medium|Low","risk_flag":false,"risk_level":"Critical|High|Medium|Low","summary":"brief","what_next":"action with price levels","sell_reason":"","catalysts":["c1"],"risks":["r1"],"earnings_note":""}],"watchlist":[{"ticker":"X","score":8,"action":"STRONG_BUY|BUY|HOLD|SKIP","risk_level":"Low|Medium|High|Very High","speed":"Fast|Moderate|Slow","upside_thesis":"","risk":"","what_to_buy":"","earnings_note":"","news_summary":"","strategy_rationale":""}],"indicators":[{"ticker":"X","rsi":52,"short_interest_pct":1.2,"pe_vs_sector":"fair","analyst_momentum":"neutral"}]}
-Return ONLY the JSON object.`;
+RETURN FORMAT \u2014 one JSON object with exactly these four keys:
+{
+  "portfolio":  [{"ticker":"AAPL","action":"BUY|HOLD|REDUCE|SELL|STRONG BUY","conviction":"High|Medium|Low","risk_flag":false,"risk_level":"Critical|High|Medium|Low","summary":"2-3 sentence assessment","what_next":"specific action with price levels","sell_reason":"","catalysts":["c1"],"risks":["r1"],"earnings_note":""}],
+  "earnings":   [{"ticker":"ADBE","earnings_date":"11-Jun-26","signal":"BUY_BEFORE|SELL_BEFORE|HOLD|WAIT","expectation":"BEAT|MISS|IN-LINE|UNCERTAIN","eps_estimate":"$5.87","eps_prev_year":"$5.06","ai_commentary":"2-3 sentences: context beyond raw data, risks, catalysts, what to watch"}],
+  "watchlist":  [{"ticker":"AMAT","score":9,"action":"STRONG_BUY|BUY|HOLD|SKIP","risk_level":"Low|Medium|High|Very High","speed":"Fast|Moderate|Slow","upside_thesis":"","risk":"","what_to_buy":"","earnings_note":"","news_summary":"","strategy_rationale":""}],
+  "indicators": [{"ticker":"AAPL","rsi":52,"short_interest_pct":0.6,"pe_vs_sector":"fair","analyst_momentum":"neutral"}]
 }
-
+Rules: include ALL ${PF.holdings.length} holdings in portfolio, exactly 20 in watchlist, all tickers in indicators, only earnings-window stocks in earnings. Return ONLY the JSON object.`;
+}
 function makeFullPrompt() {
   if (!PF.holdings.length) return '⚠️ Load data first (complete Step 1).';
   const prof = document.getElementById('runProfile').value, hor = document.getElementById('runHorizon').value;
@@ -2066,6 +2210,9 @@ function applyPasted() {
     if (js && !Array.isArray(js) && (js.portfolio || js.watchlist || js.indicators)) {
       let aiC=0,wlC=0,indC=0;
       (js.portfolio||[]).forEach(r=>{if(r.ticker&&PF.holdings.find(h=>h.ticker===r.ticker)){aiCache[r.ticker]=r;aiC++;}});
+      // Earnings AI commentary from master response
+      (js.earnings||[]).forEach(r=>{if(!r.ticker)return; const existing=earningsCache[r.ticker]||{}; earningsCache[r.ticker]={...existing,has_earnings:true,earnings_date:r.earnings_date||existing.earnings_date,signal:r.signal||existing.signal,expectation:r.expectation||existing.expectation,eps_estimate:r.eps_estimate||existing.eps_estimate||'N/A',eps_prev_year:r.eps_prev_year||existing.eps_prev_year||'N/A',rationale:r.ai_commentary||(existing.rationale||''),days_until:existing.days_until??0};});
+      renderEarningsFromCache();
       (js.watchlist||[]).forEach(r=>{if(!r.ticker)return;wlAICache[r.ticker]={score:Number(r.score)||5,action:String(r.action||'HOLD').trim(),risk_level:String(r.risk_level||'Medium'),speed:String(r.speed||'Moderate'),upside_thesis:String(r.upside_thesis||''),risk:String(r.risk||''),what_to_buy:String(r.what_to_buy||''),earnings_note:String(r.earnings_note||''),news_summary:String(r.news_summary||''),strategy_rationale:String(r.strategy_rationale||'')};wlC++;});
       (js.indicators||[]).forEach(r=>{if(!r.ticker)return;buySmartCache[r.ticker]={rsi:r.rsi??null,short_interest_pct:r.short_interest_pct??null,pe_vs_sector:r.pe_vs_sector??null,analyst_momentum:r.analyst_momentum??null,strategy_rationale:r.strategy_rationale??null};indC++;});
       aiApplied=Object.keys(aiCache).length; updateStep3Hint();
@@ -2355,12 +2502,7 @@ function buildNearTarget() {
 const earningsCache = {};  // populated from TipRanks CSV data in buildPFFromSources
 
 // ── MODE SELECTOR ──────────────────────────────────────────────
-function selectEarnMode(mode) {
-  document.querySelectorAll('#earn-mode-prompt,#earn-mode-api').forEach(b => b.classList.remove('selected'));
-  document.getElementById('earn-mode-' + mode).classList.add('selected');
-  document.getElementById('earnPanelPrompt').style.display = mode === 'prompt' ? 'block' : 'none';
-  document.getElementById('earnPanelApi').style.display    = mode === 'api'    ? 'block' : 'none';
-}
+
 
 // ── BUILD THE EARNINGS PROMPT ───────────────────────────────────
 // Single prompt for ALL holdings — user pastes into any free AI
@@ -3574,7 +3716,7 @@ function clearSession() {
   Object.keys(wlAICache).forEach(k => delete wlAICache[k]);
   lastRunTime = null; lastFetchTime = null;
   aiApplied = 0; dataReady = false;
-  initKPIs(); buildNearTarget(); renderEarningsFromCache(); buildProfit(); buildRisk(); buildTR();
+  initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR();
   initHead(); render(); buildAIDashboard(); initWatchlist(); initBuyTab();
   updateRunBadge(); updateFetchBadge();
 }
@@ -4139,84 +4281,46 @@ function initScanTab() { restoreScanCache(); }
 
 
 
-// ═══════════════════════════════════════════════════════════════
-// EARNINGS — rendered directly from TipRanks data
-// earningsCache is populated in buildPFFromSources from TR CSV
-// No AI scan needed — data is accurate from your TipRanks export
-// ═══════════════════════════════════════════════════════════════
 function renderEarningsFromCache() {
   const grid   = document.getElementById('earnGrid');
   const counts = document.getElementById('earnCounts');
   const noData = document.getElementById('earnNoData');
   if (!grid) return;
-
   const entries = Object.values(earningsCache).filter(e => e.has_earnings);
-
   if (!entries.length) {
     if (noData) noData.style.display = 'block';
-    grid.innerHTML = '';
-    if (counts) counts.innerHTML = '';
-    return;
+    grid.innerHTML = ''; if (counts) counts.innerHTML = ''; return;
   }
   if (noData) noData.style.display = 'none';
-
-  // Sort by days_until ascending (soonest first)
-  entries.sort((a, b) => (a.days_until || 99) - (b.days_until || 99));
-
-  // Filter to next 10 days for the panel
+  entries.sort((a,b) => (a.days_until||99) - (b.days_until||99));
   const next10 = entries.filter(e => e.days_until >= 0 && e.days_until <= 10);
-  const display = next10.length > 0 ? next10 : entries.filter(e => e.days_until >= 0).slice(0, 8);
-
-  const sellN  = display.filter(e => e.signal === 'SELL_BEFORE').length;
-  const buyN   = display.filter(e => e.signal === 'BUY_BEFORE').length;
-  const holdN  = display.filter(e => e.signal === 'HOLD' || e.signal === 'WAIT' || e.signal === 'WATCH').length;
-
+  const display = next10.length > 0 ? next10 : entries.filter(e => e.days_until >= 0).slice(0,8);
+  const sellN = display.filter(e => e.signal==='SELL_BEFORE').length;
+  const buyN  = display.filter(e => e.signal==='BUY_BEFORE').length;
+  const holdN = display.filter(e => e.signal==='HOLD'||e.signal==='WAIT'||e.signal==='WATCH').length;
   if (counts) counts.innerHTML = [
-    sellN ? `<span class="ec ec-red">${sellN} Sell Before</span>`   : '',
-    buyN  ? `<span class="ec ec-green">${buyN} Buy Before</span>`   : '',
-    holdN ? `<span class="ec ec-amber">${holdN} Hold/Watch</span>`  : '',
+    sellN ? `<span class="ec ec-red">${sellN} Sell Before</span>` : '',
+    buyN  ? `<span class="ec ec-green">${buyN} Buy Before</span>` : '',
+    holdN ? `<span class="ec ec-amber">${holdN} Hold/Watch</span>` : '',
   ].filter(Boolean).join('');
-
   grid.innerHTML = display.map(e => {
-    const h       = PF.holdings.find(x => x.ticker === e.ticker);
-    const cardCls = e.signal === 'SELL_BEFORE' ? 'earn-card-red'
-                  : e.signal === 'BUY_BEFORE'  ? 'earn-card-green'
-                  : e.signal === 'HOLD'         ? 'earn-card-amber'
-                  : 'earn-card-gray';
-    const sigCls  = e.signal === 'SELL_BEFORE' ? 'es-sell'
-                  : e.signal === 'BUY_BEFORE'  ? 'es-buy'
-                  : 'es-hold';
-    const sigLbl  = {
-      SELL_BEFORE: '\u26d4 SELL BEFORE EARNINGS',
-      BUY_BEFORE:  '\u2705 BUY / HOLD BEFORE EARNINGS',
-      HOLD:        '\u23f8 HOLD THROUGH EARNINGS',
-      WATCH:       '\uD83D\uDC41 WATCH \u2014 approaching earnings',
-      WAIT:        '\u23F3 UNCERTAIN \u2014 check further',
-    }[e.signal] || e.signal;
-
-    const urgCls  = e.days_until <= 1 ? 'color:#c62828;font-weight:700'
-                  : e.days_until <= 3 ? 'color:#e65100;font-weight:700'
-                  : 'color:var(--blue)';
-    const daysLbl = e.days_until <= 0 ? 'TODAY \u26a1'
-                  : e.days_until === 1 ? 'Tomorrow \u26a1'
-                  : `In ${e.days_until} days`;
-
+    const h = PF.holdings.find(x => x.ticker === e.ticker);
+    const cardCls = e.signal==='SELL_BEFORE'?'earn-card-red':e.signal==='BUY_BEFORE'?'earn-card-green':e.signal==='HOLD'?'earn-card-amber':'earn-card-gray';
+    const sigCls  = e.signal==='SELL_BEFORE'?'es-sell':e.signal==='BUY_BEFORE'?'es-buy':'es-hold';
+    const sigLbl  = {SELL_BEFORE:'\u26d4 SELL BEFORE EARNINGS',BUY_BEFORE:'\u2705 BUY / HOLD BEFORE EARNINGS',HOLD:'\u23f8 HOLD THROUGH EARNINGS',WATCH:'\uD83D\uDC41 WATCH',WAIT:'\u23F3 UNCERTAIN'}[e.signal]||e.signal;
+    const urgCls  = e.days_until<=1?'color:#c62828;font-weight:700':e.days_until<=3?'color:#e65100;font-weight:700':'color:var(--blue)';
+    const daysLbl = e.days_until<=0?'TODAY \u26a1':e.days_until===1?'Tomorrow \u26a1':`In ${e.days_until} days`;
     return `<div class="earn-card ${cardCls}">
-      <div class="earn-top">
-        <span class="earn-tk" onclick="jumpTo('${e.ticker}')">${e.ticker}
-          <span style="font-size:9px;font-weight:400;color:var(--text3)">${h ? h.description.replace(/ INC| CORP| COM| LTD/gi,'').trim() : ''}</span>
-        </span>
-        <span class="earn-days" style="${urgCls}">${daysLbl}</span>
-      </div>
-      <div class="earn-date">\uD83D\uDCC5 ${e.earnings_date}${e.earnings_time && e.earnings_time !== 'TBA' ? ' \u00b7 ' + e.earnings_time : ''}</div>
+      <div class="earn-top"><span class="earn-tk" onclick="jumpTo('${e.ticker}')">${e.ticker}
+        <span style="font-size:9px;font-weight:400;color:var(--text3)">${h?h.description.replace(/ INC| CORP| COM| LTD/gi,'').trim():''}</span>
+      </span><span class="earn-days" style="${urgCls}">${daysLbl}</span></div>
+      <div class="earn-date">\uD83D\uDCC5 ${e.earnings_date}${e.earnings_time&&e.earnings_time!=='TBA'?' \u00b7 '+e.earnings_time:''}</div>
       <span class="earn-signal ${sigCls}">${sigLbl}</span>
-      <div class="earn-exp ${e.expectation === 'MISS' ? 'earn-exp-neg' : e.expectation === 'BEAT' ? 'earn-exp-pos' : 'earn-exp-neu'}" style="font-size:11px;margin:5px 0;font-weight:600">
-        Expectation: ${e.expectation}${e.eps_estimate !== 'N/A' ? ' \u00b7 EPS est: ' + e.eps_estimate : ''}${e.eps_prev_year !== 'N/A' ? ' (prev yr: ' + e.eps_prev_year + ')' : ''}
+      <div class="earn-exp ${e.expectation==='MISS'?'earn-exp-neg':e.expectation==='BEAT'?'earn-exp-pos':'earn-exp-neu'}" style="font-size:11px;margin:5px 0;font-weight:600">
+        ${e.expectation}${e.eps_estimate!=='N/A'?' \u00b7 EPS est: '+e.eps_estimate:''}${e.eps_prev_year!=='N/A'?' (prev: '+e.eps_prev_year+')':''}
       </div>
       <div class="earn-rationale">${e.rationale}</div>
-      ${h ? `<div style="font-size:10px;color:var(--text3);margin-top:6px;border-top:1px solid var(--border);padding-top:5px">
-        Your position: ${h.value} \u00b7 P&L: ${h.unrealized_gl.split(' ').slice(0,2).join(' ')}
-      </div>` : ''}
+      ${h?`<div style="font-size:10px;color:var(--text3);margin-top:6px;border-top:1px solid var(--border);padding-top:5px">Position: ${h.value} \u00b7 P&L: ${h.unrealized_gl.split(' ').slice(0,2).join(' ')}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -4230,7 +4334,7 @@ function renderEarningsFromCache() {
   } catch(e) {}
 
   // 2. Restore GDrive links
-  loadSavedGDriveLinks();
+  loadSavedGDriveLinks(); loadSavedODriveLinks();
   restoreSBICache();
   restoreScanCache();
 
@@ -4279,7 +4383,7 @@ function renderEarningsFromCache() {
   }
 
   // 4. Render — if data was restored, dashboard fills immediately
-  initKPIs(); buildNearTarget(); renderEarningsFromCache(); buildProfit(); buildRisk(); buildTR(); initHead(); render();
+  initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR(); initHead(); render();
   buildAIDashboard(); initWatchlist(); initBuyTab();
 
   // 5. If GDrive links are saved AND no data yet, hint to fetch
