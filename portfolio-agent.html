@@ -1537,7 +1537,7 @@ function loadSavedODriveLinks() {
     if (tr) { document.getElementById('odTR').value = tr; showSavedBadge('odSavedTR', true); }
     if (pf && tr) {
       selectSource('onedrive');
-      setFetchStatus('', '↑ Saved OneDrive links loaded — click Fetch to load');
+      setFetchStatus('', '↑ Saved Dropbox links loaded — click Fetch to load');
     }
   } catch(e) {}
 }
@@ -1597,7 +1597,7 @@ function onedriveLinkToDirectUrl(link) {
     if (!direct.includes('download')) direct += (direct.includes('?') ? '&' : '?') + 'download=1';
     return direct;
   }
-  throw new Error('Not a recognized OneDrive link');
+  throw new Error('Not a recognized Dropbox link');
 }
 
 function isOneDriveLink(link) {
@@ -1820,15 +1820,15 @@ async function fetchData() {
     if (activeSource === 'onedrive') {
       const pfLink = document.getElementById('odPF').value.trim();
       const trLink = document.getElementById('odTR').value.trim();
-      if (!pfLink || !trLink) throw new Error('Paste both OneDrive links first.');
+      if (!pfLink || !trLink) throw new Error('Paste both Dropbox links first. Copy share links from dropbox.com and paste above.');
       saveODriveLinks();
-      setFetchStatus('loading', '⏳ Fetching Portfolio from OneDrive…');
+      setFetchStatus('loading', '⏳ Fetching Portfolio from Dropbox…');
       pfText = await fetchOneDriveCSV(pfLink);
       if (!pfText) throw new Error('Dropbox fetch failed for Portfolio. Make sure you copied the share link from Dropbox (should contain dropbox.com). Check that sharing is set to "Anyone with this link".');
-      setFetchStatus('loading', '⏳ Fetching TipRanks from OneDrive…');
+      setFetchStatus('loading', '⏳ Fetching TipRanks from Dropbox…');
       trText = await fetchOneDriveCSV(trLink);
       if (!trText) throw new Error('Dropbox fetch failed for TipRanks. Make sure you copied the share link from Dropbox (should contain dropbox.com). Check that sharing is set to "Anyone with this link".');
-      srcLabel = 'OneDrive';
+      srcLabel = 'Dropbox';
     }
 
     // Quick validation parse
