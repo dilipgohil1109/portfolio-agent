@@ -3121,7 +3121,27 @@ function applyPasted() {
     // MASTER RESPONSE — object with portfolio / watchlist / indicators keys
     if (js && !Array.isArray(js) && (js.portfolio || js.watchlist || js.indicators)) {
       let aiC=0,wlC=0,indC=0;
-      (js.portfolio||[]).forEach(r=>{if(r.ticker&&PF.holdings.find(h=>h.ticker===r.ticker)){aiCache[r.ticker]=r;aiC++;}});
+      // Build name→ticker lookup for fuzzy matching
+      const tickerByName = {};
+      PF.holdings.forEach(h => {
+        tickerByName[h.ticker.toLowerCase()] = h.ticker;
+        const shortName = (h.description||'').replace(/ INC| CORP| COM| LTD| SHS| PLC/gi,'').trim().toLowerCase();
+        if (shortName) tickerByName[shortName] = h.ticker;
+      });
+      (js.portfolio||[]).forEach(r => {
+        if (!r.ticker) return;
+        // Try exact match first
+        let matched = PF.holdings.find(h => h.ticker === r.ticker);
+        // Try case-insensitive ticker
+        if (!matched) matched = PF.holdings.find(h => h.ticker.toLowerCase() === r.ticker.toLowerCase());
+        // Try by name field if AI returned company name instead of ticker
+        if (!matched && r.name) {
+          const rName = r.name.replace(/ INC| CORP| COM| LTD/gi,'').trim().toLowerCase();
+          const tk = tickerByName[rName];
+          if (tk) matched = PF.holdings.find(h => h.ticker === tk);
+        }
+        if (matched) { aiCache[matched.ticker] = { ...r, ticker: matched.ticker }; aiC++; }
+      });
       // Earnings AI commentary from master response
       (js.earnings||[]).forEach(r=>{if(!r.ticker)return; const existing=earningsCache[r.ticker]||{}; earningsCache[r.ticker]={...existing,has_earnings:true,earnings_date:r.earnings_date||existing.earnings_date,signal:r.signal||existing.signal,expectation:r.expectation||existing.expectation,eps_estimate:r.eps_estimate||existing.eps_estimate||'N/A',eps_prev_year:r.eps_prev_year||existing.eps_prev_year||'N/A',rationale:r.ai_commentary||(existing.rationale||''),days_until:existing.days_until??0};});
       renderEarningsFromCache();
@@ -3144,8 +3164,19 @@ function applyPasted() {
       (js.indicators||[]).forEach(r=>{if(!r.ticker)return;buySmartCache[r.ticker]={rsi:r.rsi??null,short_interest_pct:r.short_interest_pct??null,pe_vs_sector:r.pe_vs_sector??null,analyst_momentum:r.analyst_momentum??null,strategy_rationale:r.strategy_rationale??null};indC++;});
       aiApplied=Object.keys(aiCache).length; updateStep3Hint();
       render();buildRisk();buildTR();renderWatchlist();renderBuyTab();
-      setTimeout(()=>{buildAIDashboard();saveSession();updateSBIBadge(indC);},100);
-      st.textContent=`\u2705 Master Analysis \u2014 ${aiC} portfolio strategies, ${wlC} watchlist picks, ${indC} indicators loaded`;
+      setTimeout(()=>{
+        buildAIDashboard();
+        saveSession();
+        updateSBIBadge(indC);
+        // Re-inject into any open cards immediately
+        document.querySelectorAll('.sc.open').forEach(el => {
+          const tk = el.dataset.tk;
+          if (tk && aiCache[tk]) injectAI(tk);
+        });
+      },100);
+      const missed = PF.holdings.filter(h => !aiCache[h.ticker]).map(h => h.ticker);
+      const missedStr = missed.length ? ` · Missing: ${missed.slice(0,5).join(', ')}${missed.length>5?'…':''}` : '';
+      st.textContent=`✅ Master Analysis — ${aiC} portfolio strategies, ${wlC} watchlist picks, ${indC} indicators loaded${missedStr}`;
       st.className='apply-status ok'; return;
     }
     // STANDARD RESPONSE — plain array
@@ -3344,7 +3375,7 @@ function cardHTML(h) {
   const ai = aiCache[h.ticker]; const fl = flagFor(h, ai); const gp = h.unrealized_gl.split(' '); const [bc, bl] = bdgR(h.bofa_rating);
   const ss = h.tipranks_smartscore; const ssNum = (ss === 'N/A' || ss === 'nan') ? null : parseFloat(ss);
   const ssTrend = ssNum !== null ? ssTrendArrow(h.ticker) : '';
-  const ssH = ssNum === null ? '<span style="color:var(--text3)">—</span>' : `<span style="color:${ssCol(ss)};font-weight:700">${ssNum.toFixed(0)}</span>${ssTrend}`;
+  const ssHtml = ssNum === null ? '<span style="color:var(--text3)">—</span>' : `<span style="color:${ssCol(ss)};font-weight:700">${ssNum.toFixed(0)}</span>${ssTrend}`;
   const trC = h.tipranks_consensus; const trH = (!h.in_tipranks || trC === 'N/A' || trC === 'nan') ? '<span style="color:var(--text3);font-size:10px">—</span>' : `<span class="cpill ${cpCls(trC)}" style="font-size:10px;padding:2px 6px">${trC}</span>`;
   const tgt = h.tipranks_target; const tgtH = (!h.in_tipranks || tgt === 'N/A' || tgt === 'nan') ? '<span style="color:var(--text3)">—</span>' : `<span style="color:#0c8b7a;font-weight:700;font-size:11px">${tgt}</span>`;
   const up = parseFloat(h.upside_pct); const upH = isNaN(up) ? '<span style="color:var(--text3)">N/A</span>' : `<span style="color:${upCol(h.upside_pct)};font-weight:700">${h.upside_pct}</span>`;
@@ -3352,9 +3383,19 @@ function cardHTML(h) {
   const tier = h.profit_tier; const tm = tier && TM[tier] ? TM[tier] : null;
   const tierH = tm ? `<span class="tbd ${tm.bdg}" style="font-size:9px">${tm.e} ${tm.lbl}</span>` : '<span style="color:var(--text3);font-size:10px">—</span>';
   const dc = h.description.replace(/ INC| CORP| COM| LTD| SHS| REG| CL [AB]/gi, '').trim();
-  return `<div class="sc" id="sc-${h.ticker}" data-tk="${h.ticker}" onclick="toggleCard(this.dataset.tk)"><div class="sc-row" style="grid-template-columns:${GC}"><div class="scc" style="text-align:center"><div class="dot d-${fl}"></div></div><div class="scc"><div class="tk-main">${h.ticker}</div></div><div class="scc"><div class="tk-sub" title="${h.description}">${dc}</div></div><div class="scc" style="font-weight:600">${h.value}</div><div class="scc"><span class="${glCls(h.unrealized_gl)}">${gp[0] || '—'}</span><div style="font-size:9px;color:var(--text3)">${gp[1] || ''}</div></div><div class="scc"><span class="bdg ${bc}">${bl}</span></div><div class="scc">${ssH}</div><div class="scc">${trH}</div><div class="scc">${tgtH}</div><div class="scc">${upH}</div><div class="scc" id="act-${h.ticker}">${actH}</div><div class="scc">${tierH}</div></div><div class="ep" id="ep-${h.ticker}"><div class="epc"><div class="epc-title">📊 Position</div><div class="epr"><span class="epr-l">Shares</span><span class="epr-v">${h.qty}</span></div><div class="epr"><span class="epr-l">Price</span><span class="epr-v">${h.price}</span></div><div class="epr"><span class="epr-l">Avg Cost</span><span class="epr-v">${h.unit_cost}</span></div><div class="epr"><span class="epr-l">Value</span><span class="epr-v">${h.value}</span></div><div class="epr"><span class="epr-l">P&L</span><span class="epr-v ${glCls(h.unrealized_gl)}">${h.unrealized_gl}</span></div><div class="epr"><span class="epr-l">Portfolio %</span><span class="epr-v">${h.port_pct ? h.port_pct.toFixed(1) + '%' : '—'}</span></div><div class="epr"><span class="epr-l">Sector</span><span class="epr-v">${h.sector === 'N/A' ? '—' : h.sector}</span></div></div><div class="epc"><div class="epc-title">🎯 Analyst + Profit</div><div class="epr"><span class="epr-l">BofA Rating</span><span class="epr-v"><span class="bdg ${bc}">${h.bofa_rating === '--' ? 'No Rating' : h.bofa_rating}</span></span></div><div class="epr"><span class="epr-l">TR Smart Score</span><span class="epr-v">${ssH}</span></div><div class="epr"><span class="epr-l">TR Consensus</span><span class="epr-v">${trH}</span></div><div class="epr"><span class="epr-l">TR Target</span><span class="epr-v">${tgtH}</span></div><div class="epr"><span class="epr-l">Upside</span><span class="epr-v">${upH}</span></div><div class="epr"><span class="epr-l">Profit Signal</span><span class="epr-v">${tierH}</span></div>${h.profit_suggestion ? `<div style="font-size:10px;color:var(--text2);margin-top:6px;padding-top:5px;border-top:1px solid var(--border);line-height:1.5">${h.profit_suggestion}</div>` : ''}</div><div class="epc" id="aicard-${h.ticker}"><div class="epc-title">🤖 AI Strategy</div><div class="ai-pend">Use Step 2 (AI Analysis) to add strategy for this holding.</div></div></div></div>`;
+  return `<div class="sc" id="sc-${h.ticker}" data-tk="${h.ticker}" onclick="toggleCard(this.dataset.tk)"><div class="sc-row" style="grid-template-columns:${GC}"><div class="scc" style="text-align:center"><div class="dot d-${fl}"></div></div><div class="scc"><div class="tk-main">${h.ticker}</div></div><div class="scc"><div class="tk-sub" title="${h.description}">${dc}</div></div><div class="scc" style="font-weight:600">${h.value}</div><div class="scc"><span class="${glCls(h.unrealized_gl)}">${gp[0] || '—'}</span><div style="font-size:9px;color:var(--text3)">${gp[1] || ''}</div></div><div class="scc"><span class="bdg ${bc}">${bl}</span></div><div class="scc">${ssHtml}</div><div class="scc">${trH}</div><div class="scc">${tgtH}</div><div class="scc">${upH}</div><div class="scc" id="act-${h.ticker}">${actH}</div><div class="scc">${tierH}</div></div><div class="ep" id="ep-${h.ticker}"><div class="epc"><div class="epc-title">📊 Position</div><div class="epr"><span class="epr-l">Shares</span><span class="epr-v">${h.qty}</span></div><div class="epr"><span class="epr-l">Price</span><span class="epr-v">${h.price}</span></div><div class="epr"><span class="epr-l">Avg Cost</span><span class="epr-v">${h.unit_cost}</span></div><div class="epr"><span class="epr-l">Value</span><span class="epr-v">${h.value}</span></div><div class="epr"><span class="epr-l">P&L</span><span class="epr-v ${glCls(h.unrealized_gl)}">${h.unrealized_gl}</span></div><div class="epr"><span class="epr-l">Portfolio %</span><span class="epr-v">${h.port_pct ? h.port_pct.toFixed(1) + '%' : '—'}</span></div><div class="epr"><span class="epr-l">Sector</span><span class="epr-v">${h.sector === 'N/A' ? '—' : h.sector}</span></div></div><div class="epc"><div class="epc-title">🎯 Analyst + Profit</div><div class="epr"><span class="epr-l">BofA Rating</span><span class="epr-v"><span class="bdg ${bc}">${h.bofa_rating === '--' ? 'No Rating' : h.bofa_rating}</span></span></div><div class="epr"><span class="epr-l">TR Smart Score</span><span class="epr-v">${ssHtml}</span></div><div class="epr"><span class="epr-l">TR Consensus</span><span class="epr-v">${trH}</span></div><div class="epr"><span class="epr-l">TR Target</span><span class="epr-v">${tgtH}</span></div><div class="epr"><span class="epr-l">Upside</span><span class="epr-v">${upH}</span></div><div class="epr"><span class="epr-l">Profit Signal</span><span class="epr-v">${tierH}</span></div>${h.profit_suggestion ? `<div style="font-size:10px;color:var(--text2);margin-top:6px;padding-top:5px;border-top:1px solid var(--border);line-height:1.5">${h.profit_suggestion}</div>` : ''}</div><div class="epc" id="aicard-${h.ticker}"><div class="epc-title">🤖 AI Strategy</div><div class="ai-pend" style="font-size:11px;color:var(--text3);line-height:1.7">💡 No AI strategy yet for this ticker.<br>Go to <strong>Step 2 → ⭐ Master Analysis</strong> → Generate → paste into Gemini → Apply.<br>If you already ran it, the AI may have skipped this ticker — check the Apply status message.</div></div></div></div>`;
 }
-function toggleCard(t) { const sc = document.getElementById('sc-' + t); const was = sc.classList.contains('open'); document.querySelectorAll('.sc.open').forEach(el => el.classList.remove('open')); if (!was) { sc.classList.add('open'); sc.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); if (aiCache[t]) injectAI(t); } }
+function toggleCard(t) {
+  const sc = document.getElementById('sc-' + t);
+  const was = sc.classList.contains('open');
+  document.querySelectorAll('.sc.open').forEach(el => el.classList.remove('open'));
+  if (!was) {
+    sc.classList.add('open');
+    sc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Always try inject — handles case where aiCache was populated after card was rendered
+    if (aiCache[t]) injectAI(t);
+  }
+}
 function jumpTo(ticker) { switchTab('pf', document.querySelectorAll('.tab-btn')[1]); curFilter = 'all'; document.querySelectorAll('.fb').forEach(b => b.classList.remove('on')); document.querySelector('.fb').classList.add('on'); render(); setTimeout(() => { const el = document.getElementById('sc-' + ticker); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); toggleCard(ticker); } }, 100); }
 function setF(f, el) { curFilter = f; document.querySelectorAll('.fb').forEach(b => b.classList.remove('on')); el.classList.add('on'); render(); }
 function togglePanel(bId, tId) { const b = document.getElementById(bId); const t = document.getElementById(tId); const o = b.classList.toggle('open'); t.textContent = o ? '▼' : '▶'; }
