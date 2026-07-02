@@ -843,6 +843,29 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
             <label>TipRanks CSV — Dropbox link <span class="gd-saved-badge" id="odSavedTR">Saved</span></label>
             <input type="url" id="odTR" placeholder="https://www.dropbox.com/scl/fi/.../tipranks.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
             <div style="font-size:10px;color:var(--text3);margin-top:5px">&#x2139; Free Dropbox account works. Update files daily by re-uploading — same link, fresh data.</div>
+
+            <!-- PASTE FALLBACK when proxy fails -->
+            <div id="dbPasteFallback" style="display:none;margin-top:10px;border-top:1px solid var(--border2);padding-top:10px">
+              <div style="font-size:10px;font-weight:700;color:#e65100;margin-bottom:6px">⚠ Proxy blocked — paste CSV text directly instead:</div>
+              <div style="font-size:10px;color:var(--text2);margin-bottom:6px;line-height:1.6">
+                1. Open your Dropbox link in browser → file downloads<br>
+                2. Open the downloaded file in Notepad / TextEdit → Select All → Copy<br>
+                3. Paste into the boxes below
+              </div>
+              <label style="font-size:10px;font-weight:600;color:var(--text2)">Portfolio CSV — paste text here</label>
+              <textarea id="pfPasteText" rows="3" onclick="event.stopPropagation()" 
+                style="width:100%;font-size:10px;padding:5px;border:1px solid var(--border2);border-radius:4px;resize:vertical;font-family:monospace;box-sizing:border-box;margin-bottom:6px"
+                placeholder="Paste portfolio CSV text here..."></textarea>
+              <label style="font-size:10px;font-weight:600;color:var(--text2)">TipRanks CSV — paste text here</label>
+              <textarea id="trPasteText" rows="3" onclick="event.stopPropagation()"
+                style="width:100%;font-size:10px;padding:5px;border:1px solid var(--border2);border-radius:4px;resize:vertical;font-family:monospace;box-sizing:border-box"
+                placeholder="Paste TipRanks CSV text here..."></textarea>
+              <button onclick="event.stopPropagation();loadFromPastedCSV()" 
+                style="margin-top:8px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;width:100%">
+                ✓ Load from Pasted Text
+              </button>
+            </div>
+
           </div>
         </div>
 
@@ -1520,6 +1543,30 @@ function onFileSelected(type, inp) {
 // ── GDRIVE LINK PERSISTENCE ───────────────────────────────────
 // Links saved to localStorage so they survive page reloads and downloads
 
+function loadFromPastedCSV() {
+  const pfText = document.getElementById('pfPasteText')?.value.trim();
+  const trText = document.getElementById('trPasteText')?.value.trim();
+  if (!pfText || !trText) { alert('Paste both Portfolio and TipRanks CSV text first.'); return; }
+  // Feed directly into runAnalysis3
+  setFetchStatus('loading', '⏳ Loading pasted CSV data…');
+  try {
+    const pfCheck = parsePortfolioCSV(pfText);
+    if (Object.keys(pfCheck).length === 0) throw new Error('No holdings found in pasted Portfolio CSV.');
+    dataReady = true;
+    // Store raw text for runAnalysis3
+    window._pfText  = pfText;
+    window._trText  = trText;
+    window._pastedSrc = 'Pasted CSV';
+    ls_set(LS_SRC_LABEL, 'Pasted CSV');
+    setFetchStatus('ok', '✅ CSV text loaded — click Run Analysis (Step 3) to continue');
+    // Advance to step 2
+    document.getElementById('step2')?.classList.add('active');
+    document.getElementById('step2num').textContent = '2';
+  } catch(e) {
+    setFetchStatus('err', '✗ ' + e.message);
+  }
+}
+
 function saveODriveLinks() {
   const pf = document.getElementById('odPF').value.trim();
   const tr = document.getElementById('odTR').value.trim();
@@ -1606,54 +1653,44 @@ function isOneDriveLink(link) {
 }
 
 async function fetchOneDriveCSV(link) {
-  // Dropbox: convert share link (dl=0) to direct download (dl=1)
-  // Dropbox dl=1 links serve files with proper CORS headers — no proxy needed.
-  let url = link.trim();
+  // Convert Dropbox share link to direct download URL
+  // www.dropbox.com → dl.dropboxusercontent.com (removes CORS restriction)
+  let url = link.trim()
+    .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
+    .replace(/[?&]dl=0/g, '')
+    .replace(/[?&]dl=1/g, '');
 
-  // Convert dl=0 → dl=1, or add dl=1 if missing
-  if (url.includes('dropbox.com') || url.includes('dropboxusercontent.com')) {
-    url = url.replace(/[?&]dl=0/, '').replace(/[?&]dl=1/, '');  // strip existing dl param
-    url = url.includes('?') ? url + '&dl=1' : url + '?dl=1';
-    // Also convert www.dropbox.com to dl.dropboxusercontent.com for direct download
-    url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=1','').replace('&dl=1','');
-  }
-
-  // Strategy 1: Direct fetch (Dropbox has CORS headers — should work)
+  // Try direct fetch first (dl.dropboxusercontent.com supports CORS)
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (r.ok) {
       const t = await r.text();
       if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
     }
-  } catch(e) { /* try with dl=1 param version */ }
+  } catch(e) { /* fall through to proxies */ }
 
-  // Strategy 2: dl=1 param version as fallback
-  const dlUrl = link.includes('?') ? link.replace(/dl=\d/,'dl=1') + (link.includes('dl=') ? '' : '&dl=1') : link + '?dl=1';
-  try {
-    const r = await fetch(dlUrl, { signal: AbortSignal.timeout(15000) });
-    if (r.ok) {
-      const t = await r.text();
-      if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
-    }
-  } catch(e) {}
-
-  // Strategy 3: CORS proxies as last resort
+  // Fallback: try CORS proxies with both URL formats
+  const dlUrl = link.trim().replace(/[?&]dl=0/g,'').replace(/[?&]dl=1/g,'');
+  const wwwDl = dlUrl + (dlUrl.includes('?') ? '&dl=1' : '?dl=1');
   const proxies = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   ];
-  for (const pFn of proxies) {
-    try {
-      const r = await fetch(pFn(dlUrl), { signal: AbortSignal.timeout(12000) });
-      if (r.ok) {
-        const t = await r.text();
-        if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
-      }
-    } catch(e) {}
+  for (const tryUrl of [url, wwwDl]) {
+    for (const pFn of proxies) {
+      try {
+        const r = await fetch(pFn(tryUrl), { signal: AbortSignal.timeout(15000) });
+        if (r.ok) {
+          const t = await r.text();
+          if (t && t.length > 100 && !t.trimStart().startsWith('<') && !t.includes('<!DOCTYPE')) return t;
+        }
+      } catch(e) { /* try next */ }
+    }
   }
-
   return null;
 }
+
 
 async function fetchGDriveCSV(fileId) {
   // Google Drive now requires browser auth cookies to download.
@@ -1824,7 +1861,12 @@ async function fetchData() {
       saveODriveLinks();
       setFetchStatus('loading', '⏳ Fetching Portfolio from Dropbox…');
       pfText = await fetchOneDriveCSV(pfLink);
-      if (!pfText) throw new Error('Dropbox fetch failed for Portfolio. Make sure you copied the share link from Dropbox (should contain dropbox.com). Check that sharing is set to "Anyone with this link".');
+      if (!pfText) {
+        // Auto-show paste fallback
+        const fb = document.getElementById('dbPasteFallback');
+        if (fb) fb.style.display = 'block';
+        throw new Error('Dropbox fetch failed — proxy blocked on this network. Scroll up and use the "Paste CSV text" fallback that just appeared, OR switch to Upload from Device.');
+      }
       setFetchStatus('loading', '⏳ Fetching TipRanks from Dropbox…');
       trText = await fetchOneDriveCSV(trLink);
       if (!trText) throw new Error('Dropbox fetch failed for TipRanks. Make sure you copied the share link from Dropbox (should contain dropbox.com). Check that sharing is set to "Anyone with this link".');
