@@ -1456,6 +1456,11 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
     <div class="scan-hero-sub">Trade history · re-entry signals · sell quality · pending orders</div>
   </div>
 
+  <div id="actStatus" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:8px 14px;margin-bottom:12px;font-size:11px;display:flex;align-items:center;justify-content:space-between">
+    <span id="actStatusText" style="color:var(--text3)">Loading activity data…</span>
+    <button onclick="buildActivityTab()" style="font-size:10px;padding:3px 10px;border:1px solid var(--border2);border-radius:5px;background:var(--bg2);cursor:pointer;color:var(--text2)">↻ Refresh</button>
+  </div>
+
   <div id="actEmpty" style="display:none;text-align:center;padding:30px;color:var(--text3);font-size:11px">
     ⚠ No activity data loaded.<br>Add your Activity CSV Dropbox link in Step 1 → Dropbox card, then Fetch &amp; Load.
   </div>
@@ -1932,12 +1937,17 @@ async function fetchData() {
           if (acText) {
             window._acText = acText;
             window._activityTrades = parseActivityCSV(acText);
+            snapshotActivityHistory(window._activityTrades);
             console.log('[Activity] Loaded', window._activityTrades.length, 'trades');
             // Persist immediately so it survives page reload
             try {
               const acStr = JSON.stringify(window._activityTrades);
               if (acStr.length < 200000) localStorage.setItem('pf_activity', acStr);
             } catch(e) {}
+            // Render tab if already open
+            if (document.getElementById('tab-activity')?.classList.contains('active')) {
+              buildActivityTab();
+            }
           }
         } catch(e) { console.warn('[Activity] fetch failed:', e); }
       }
@@ -2628,6 +2638,58 @@ function ssTrendArrow(ticker) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// ACTIVITY HISTORY ENGINE
+// ══════════════════════════════════════════════════════════════
+
+const ACT_HIST_PREFIX = 'pf_act_hist_';
+
+function snapshotActivityHistory(trades) {
+  // Save a dated snapshot of all sells keyed by ticker
+  // so we can track "last sold price over time"
+  if (!trades || !trades.length) return;
+  const key  = ACT_HIST_PREFIX + new Date().toISOString().slice(0,10);
+  const snap = {};
+  trades.filter(t => t.action === 'SELL').forEach(t => {
+    if (!snap[t.ticker] || new Date(t.date) > new Date(snap[t.ticker].date)) {
+      snap[t.ticker] = { date: t.date, price: t.price, qty: t.qty, isPending: t.isPending };
+    }
+  });
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), sells: snap }));
+    // Prune old activity history (keep 180 days)
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(ACT_HIST_PREFIX))
+      .sort().slice(0, -180)
+      .forEach(k => localStorage.removeItem(k));
+  } catch(e) {}
+}
+
+function loadActivityHistory() {
+  // Returns array of {date, sells:{ticker:{date,price,qty}}} oldest→newest
+  try {
+    return Object.keys(localStorage)
+      .filter(k => k.startsWith(ACT_HIST_PREFIX))
+      .sort()
+      .map(k => {
+        const v = JSON.parse(localStorage.getItem(k) || '{}');
+        return { date: k.replace(ACT_HIST_PREFIX,''), sells: v.sells || {} };
+      });
+  } catch(e) { return []; }
+}
+
+function getSellPriceHistory(ticker) {
+  // Returns [{date, price}] for a ticker across all history snapshots
+  const history = loadActivityHistory();
+  const result  = [];
+  history.forEach(snap => {
+    if (snap.sells[ticker]) {
+      result.push({ date: snap.date, price: snap.sells[ticker].price });
+    }
+  });
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════
 // ACTIVITY CSV ENGINE
 // ══════════════════════════════════════════════════════════════
 
@@ -2724,15 +2786,28 @@ function getTRData(ticker) {
 
 // ── BUILD ACTIVITY TAB ────────────────────────────────────────
 function buildActivityTab() {
-  const trades = window._activityTrades || [];
+  const trades  = window._activityTrades || [];
   const empty   = document.getElementById('actEmpty');
   const content = document.getElementById('actContent');
+  const statEl  = document.getElementById('actStatusText');
 
   if (!trades.length) {
     if (empty)   empty.style.display   = 'block';
     if (content) content.style.display = 'none';
+    if (statEl)  statEl.textContent    = '⚠ No activity data — add Activity CSV Dropbox link in Step 1';
     return;
   }
+
+  const sells   = trades.filter(t => t.action === 'SELL').length;
+  const buys    = trades.filter(t => t.action === 'BUY').length;
+  const pending = trades.filter(t => t.isPending).length;
+  const hist    = loadActivityHistory();
+
+  if (statEl) statEl.innerHTML =
+    `✅ <strong>${trades.length} trades</strong> loaded &nbsp;·&nbsp;
+     ${sells} sells · ${buys} buys · ${pending} pending &nbsp;·&nbsp;
+     <span style="color:var(--text3)">${hist.length} day${hist.length!==1?'s':''} of history tracked</span>`;
+
   if (empty)   empty.style.display   = 'none';
   if (content) content.style.display = 'block';
 
@@ -2870,9 +2945,16 @@ function buildReentryPanel(trades) {
         </div>
       </div>
       <div style="font-size:10px;color:var(--text2);margin-bottom:4px">${e.advice}</div>
-      ${e.trSignals.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
+      ${e.trSignals.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">
         ${e.trSignals.map(s => `<span style="background:var(--bg3);border:1px solid var(--border2);font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;color:var(--text2)">${s}</span>`).join('')}
-      </div>` : '<div style="font-size:10px;color:var(--text3)">No TipRanks data — not in watchlist</div>'}
+      </div>` : '<div style="font-size:10px;color:var(--text3);margin-top:3px">No TipRanks data — not in watchlist</div>'}
+      ${(() => {
+        const hist = getSellPriceHistory(e.tk);
+        if (hist.length < 2) return '';
+        return `<div style="font-size:9px;color:var(--text3);margin-top:4px">
+          📅 Sell history: ${hist.map(h => `$${h.price.toFixed(2)} (${h.date})`).join(' → ')}
+        </div>`;
+      })()}
     </div>`).join('');
 
   // Summary counts
@@ -3282,8 +3364,12 @@ async function runAnalysis3() {
     // Snapshot history on every successful load
     snapshotHistory();
     buildMomentumPanel();
-    // Refresh activity tab if data already loaded
-    if (window._activityTrades && window._activityTrades.length) buildActivityTab();
+    // Refresh activity tab (portfolio prices now available for re-entry calculations)
+    if (window._activityTrades && window._activityTrades.length) {
+      if (document.getElementById('tab-activity')?.classList.contains('active')) {
+        buildActivityTab();
+      }
+    }
 
     // Auto-switch to portfolio tab
     setTimeout(() => switchTab('pf', document.querySelectorAll('.tab-btn')[1]), 900);
@@ -5926,6 +6012,8 @@ function renderEarningsFromCache() {
     try {
       window._activityTrades = JSON.parse(storedAC);
       console.log('[Session] Activity restored:', window._activityTrades.length, 'trades');
+      // Ensure history snapshot exists for today
+      snapshotActivityHistory(window._activityTrades);
     } catch(e) {}
   }
 
