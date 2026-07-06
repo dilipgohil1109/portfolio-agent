@@ -1933,6 +1933,11 @@ async function fetchData() {
             window._acText = acText;
             window._activityTrades = parseActivityCSV(acText);
             console.log('[Activity] Loaded', window._activityTrades.length, 'trades');
+            // Persist immediately so it survives page reload
+            try {
+              const acStr = JSON.stringify(window._activityTrades);
+              if (acStr.length < 200000) localStorage.setItem('pf_activity', acStr);
+            } catch(e) {}
           }
         } catch(e) { console.warn('[Activity] fetch failed:', e); }
       }
@@ -1955,6 +1960,7 @@ async function fetchData() {
     ls_del(LS_AI_CACHE);
     ls_del(LS_PF_DATA);
     ls_del('pf_sbi_cache');
+    ls_del('pf_activity');
     Object.keys(buySmartCache).forEach(k => delete buySmartCache[k]);
     updateSBIBadge(0);
     // Reset dashboard to empty state
@@ -2674,12 +2680,18 @@ function parseActivityCSV(text) {
 
 function getLastSells(trades) {
   // Returns {ticker: {date, price, qty, desc}} — most recent sell per ticker
+  // Pending orders treated as confirmed (per user preference)
   const sells = {};
-  trades.filter(t => t.action === 'SELL' && !t.isPending)
+  trades.filter(t => t.action === 'SELL') // include pending
     .forEach(t => {
-      if (!sells[t.ticker]) sells[t.ticker] = t; // already sorted newest first by file order
+      if (!sells[t.ticker]) sells[t.ticker] = t;
     });
   return sells;
+}
+
+function getAllBuys(trades) {
+  // All buys including pending — for round-trip analysis
+  return trades.filter(t => t.action === 'BUY');
 }
 
 function getCurrentPrice(ticker) {
@@ -3473,31 +3485,13 @@ WATCHLIST (pre-ranked, #1 = highest score):
 ${lines}
 
 INSTRUCTIONS:
-1. Search recent news for each ticker before deciding
-2. Select the 20 best picks for an aggressive <1yr investor
-3. For each pick, give the full VRNS-style breakdown:
-   - What is happening RIGHT NOW (recent news, catalysts, M&A, momentum)
-   - 3 specific BULL CASE reasons with real data (revenue growth, margins, product cycle)
-   - 3 specific BEAR CASE risks with numbers (valuation, competition, debt)
-   - Bottom-line VERDICT: safe / speculative / aggressive? What type of investor should buy?
-   - Exact entry guidance: price range to buy, position size suggestion, stop-loss level
+1. Search recent news for each ticker
+2. Pick the 20 best for aggressive <1yr growth
+3. Return ONLY a compact JSON array — no markdown, no preamble:
 
-Return ONLY a JSON array — no markdown, no preamble:
-[{
-  "ticker": "SVRA",
-  "action": "STRONG_BUY|BUY|HOLD|SKIP",
-  "risk_level": "Low|Medium|High|Very High",
-  "speed": "Fast|Moderate|Slow",
-  "situation": "2-3 sentences on what is happening RIGHT NOW",
-  "bull_case": ["specific reason 1 with data", "specific reason 2 with data", "specific reason 3 with data"],
-  "bear_case": ["concrete risk 1 with numbers", "concrete risk 2 with numbers", "concrete risk 3 with numbers"],
-  "verdict": "1-2 sentence bottom line — safe/speculative/aggressive, who should own it",
-  "what_to_buy": "Entry: $X-$Y range. Position: Z% of portfolio. Stop-loss: $W.",
-  "earnings_note": "Earnings date, EPS estimate, BUY_BEFORE or SELL_BEFORE or HOLD",
-  "news_summary": "Most important recent development in 1 sentence",
-  "strategy_rationale": "Why this fits aggressive <1yr profile"
-}]
-Return all 20 picks. Return ONLY the JSON array.`;
+[{"ticker":"SVRA","action":"STRONG_BUY|BUY|HOLD|SKIP","risk_level":"Low|Medium|High|Very High","situation":"1-2 sentences what is happening NOW","bull_case":["reason 1","reason 2","reason 3"],"bear_case":["risk 1","risk 2","risk 3"],"verdict":"1 sentence bottom line","what_to_buy":"Entry $X-Y, stop $Z"}]
+
+Keep each field SHORT. Return all 20 objects in one array. No markdown fences.`;
 }
 
 function makeFullPrompt() {
@@ -5250,6 +5244,13 @@ function saveSession() {
     // SBI online indicators cache
     const sbiStr = JSON.stringify(buySmartCache);
     if (sbiStr.length < 100000) ls_set('pf_sbi_cache', sbiStr);
+    // Activity trades
+    if (window._activityTrades && window._activityTrades.length) {
+      try {
+        const acStr = JSON.stringify(window._activityTrades);
+        if (acStr.length < 200000) ls_set('pf_activity', acStr);
+      } catch(e) {}
+    }
     // Timestamps and source
     if (lastRunTime)   ls_set(LS_RUN_TIME,   lastRunTime);
     if (lastFetchTime) ls_set(LS_FETCH_TIME,  lastFetchTime);
@@ -5892,6 +5893,7 @@ function renderEarningsFromCache() {
   const storedPF = ls_get(LS_PF_DATA);
   const storedAI = ls_get(LS_AI_CACHE);
   const storedWL = ls_get(LS_WL_AI);
+  const storedAC = ls_get('pf_activity');
   const storedRT = ls_get(LS_RUN_TIME);
   const storedFT = ls_get(LS_FETCH_TIME);
   const storedSL = ls_get(LS_SRC_LABEL);
@@ -5917,6 +5919,13 @@ function renderEarningsFromCache() {
     try {
       const saved = JSON.parse(storedWL);
       Object.assign(wlAICache, saved);
+    } catch(e) {}
+  }
+
+  if (storedAC) {
+    try {
+      window._activityTrades = JSON.parse(storedAC);
+      console.log('[Session] Activity restored:', window._activityTrades.length, 'trades');
     } catch(e) {}
   }
 
