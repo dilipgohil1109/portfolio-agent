@@ -845,6 +845,11 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
             <input type="url" id="odTR" placeholder="https://www.dropbox.com/scl/fi/.../tipranks.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
             <label style="margin-top:8px;display:block">Activity CSV — Dropbox link <span class="gd-saved-badge" id="odSavedAC">Saved</span> <span style="font-size:9px;color:var(--text3)">(optional)</span></label>
             <input type="url" id="odAC" placeholder="https://www.dropbox.com/scl/fi/.../activity.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
+            <div style="margin-top:5px;display:flex;align-items:center;gap:8px">
+              <span style="font-size:10px;color:var(--text3)">Or upload directly:</span>
+              <input type="file" accept=".csv" id="odACFile" style="font-size:10px;color:var(--text2)" onchange="loadActivityFileLocal(this)"/>
+              <span id="odACFileStatus" style="font-size:10px;color:#2e7d32"></span>
+            </div>
             <div style="font-size:10px;color:var(--text3);margin-top:5px">&#x2139; Free Dropbox account works. Update files daily by re-uploading — same link, fresh data.</div>
 
             <!-- PASTE FALLBACK when proxy fails -->
@@ -1062,57 +1067,48 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
     </div>
   </div>
 
-  <!-- ═══ WATCHLIST BUY IDEAS ═══ -->
+  <!-- PROFIT OPTIMIZATION -->
   <div class="panel">
-    <div class="phdr" onclick="togglePanel('wlBody','wlTog')">
-      <h2>&#x1F4A1; Watchlist Buy Ideas
-        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:5px">TipRanks stocks not in your portfolio · scored for upside, safety &amp; return speed</span>
-      </h2>
+    <div class="phdr" onclick="togglePanel('ppBody','ppTog')">
+      <h2>💰 Profit Optimization <span id="ppCounts" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px"></span></h2>
+      <span class="ptog" id="ppTog">▶</span>
+    </div>
+    <div class="pp-body" id="ppBody"></div>
+  </div>
+
+  <!-- RISK MONITOR -->
+  <div class="panel">
+    <div class="phdr" onclick="togglePanel('rdBody','rdTog')">
+      <h2>🚨 Risk Monitor <span id="rdcRow" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px"></span></h2>
+      <span class="ptog" id="rdTog">▶</span>
+    </div>
+    <div class="pp-body" id="rdBody"></div>
+  </div>
+
+  <!-- TIPRANKS OVERVIEW -->
+  <div class="panel">
+    <div class="phdr" onclick="togglePanel('trBody','trTog2')">
+      <h2>📊 TipRanks Overview</h2>
+      <span class="ptog" id="trTog2">▶</span>
+    </div>
+    <div class="pp-body" id="trBody"></div>
+  </div>
+
+    <!-- MOMENTUM SIGNALS PANEL -->
+  <div class="panel" id="momPanel">
+    <div class="phdr" onclick="togglePanel('momBody','momTog')">
+      <h2>&#x1F4C8; Momentum Signals <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">SS trend &middot; target drift &middot; from your upload history</span></h2>
       <div style="display:flex;align-items:center;gap:8px">
-        <span class="wl-count" id="wlCountBadge"></span>
-        <span class="ptog" id="wlTog">&#x25B6;</span>
+        <span id="momBadge" style="font-size:10px;color:var(--text3)"></span>
+        <span class="ptog" id="momTog">&#x25B6;</span>
       </div>
     </div>
-    <div class="wl-body" id="wlBody">
-      <div style="font-size:11px;color:#3b5bdb;background:#f0f4ff;border:1px solid #b8ccf8;border-radius:var(--r2);padding:9px 12px;margin-bottom:12px;line-height:1.7">
-        &#x1F4A1; <strong>Watchlist AI analysis</strong> is included in the
-        <strong>&#x2B50; Master Analysis</strong> prompt (Data Source tab → Step 2).
-        Run that once to load buy ideas, upside thesis, risk and scores for all watchlist stocks.
-      </div>
-      <div class="wl-ctrl">
-        <div class="wl-search-wrap">
-          <span class="wl-si">&#x1F50D;</span>
-          <input type="text" class="wl-search" id="wlSearch" placeholder="Search ticker or name..." oninput="renderWatchlist()"/>
-        </div>
-        <select class="wl-sort" id="wlSort" onchange="renderWatchlist()">
-          <option value="ai">AI Score &#x2193;</option>
-          <option value="ss">Smart Score &#x2193;</option>
-          <option value="alpha">A-Z</option>
-          <option value="consensus">Consensus</option>
-        </select>
-      </div>
-      <div class="wl-filters">
-        <button class="wl-fb on" onclick="setWlFilter('all',this)">All <span id="wlCntAll"></span></button>
-        <button class="wl-fb" onclick="setWlFilter('notown',this)">&#x1F6AB; Not Owned</button>
-        <button class="wl-fb" onclick="setWlFilter('ai',this)">&#x1F916; AI Picks</button>
-        <button class="wl-fb" onclick="setWlFilter('strongbuy',this)">&#x2B50; Strong Buy</button>
-        <button class="wl-fb" onclick="setWlFilter('score9',this)">&#x1F525; Score 9-10</button>
-        <button class="wl-fb" onclick="setWlFilter('safe',this)">&#x1F6E1; Low Risk</button>
-        <button class="wl-fb" onclick="setWlFilter('fast',this)">&#x26A1; Fast Return</button>
-        <button class="wl-fb" onclick="setWlFilter('tech',this)">&#x1F4BB; Tech</button>
-        <button class="wl-fb" onclick="setWlFilter('health',this)">&#x1F3E5; Healthcare</button>
-        <button class="wl-fb" onclick="setWlFilter('owned',this)">&#x1F4BC; Also Own</button>
-      </div>
-
-      <div class="wl-grid" id="wlGrid">
-        <div style="color:var(--text3);font-size:12px;padding:16px;grid-column:1/-1;text-align:center">
-          &#x1F4A1; Generate the prompt above to get AI analysis, or browse the grid to explore your watchlist.
-        </div>
-      </div>
-
+    <div class="nt-body" id="momBody">
+      <div id="momContent"></div>
     </div>
   </div>
 
+  <!-- HOLDINGS GRID CONTROLS -->
   <div class="ctrl-bar">
     <div class="ctrl-top">
       <div class="sw"><span class="si">&#x1F50D;</span><input type="text" id="searchBox" placeholder="Search ticker or company..." oninput="render()"/></div>
@@ -1152,63 +1148,10 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
     <div style="font-size:36px;margin-bottom:12px">&#x1F916;</div>
     <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:8px">No AI strategies loaded yet</div>
     <div style="font-size:12px;line-height:1.8;max-width:480px;margin:0 auto">
-      <strong>After running analysis:</strong><br>
-      1. Go to <strong>Data Source &amp; Run</strong> tab<br>
-      2. Complete Step 1 (load data) &amp; Step 3 (run analysis)<br>
-      3. In Step 2 — generate a prompt, paste into
-         <a href="https://claude.ai" target="_blank" style="color:var(--blue)">Claude.ai</a> or ChatGPT, paste JSON response back and click Apply<br>
-      4. Return here — AI strategies will appear as actionable cards sorted by urgency
+      Complete Steps 1-3, then in Step 2 generate the Master Analysis prompt,
+      paste into Gemini/Claude, paste JSON response back and click Apply.<br>
+      AI strategies will appear as actionable cards sorted by urgency.
     </div>
-    <div style="margin-top:14px;font-size:11px;color:var(--text3);background:var(--bg3);border-radius:var(--r2);padding:8px 14px;max-width:400px;margin-left:auto;margin-right:auto">
-      💡 AI results from Step 2 appear here <em>immediately after you click Apply</em> — you don't need to re-run analysis.
-    </div>
-  </div>
-
-  <!-- MOMENTUM SIGNALS (history-based) -->
-  <div class="panel" id="momPanel">
-    <div class="phdr" onclick="togglePanel('momBody','momTog')">
-      <h2>📈 Momentum Signals <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">SS trend · target drift · from your upload history</span></h2>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span id="momBadge" style="font-size:10px;color:var(--text3)"></span>
-        <span class="ptog" id="momTog">▶</span>
-      </div>
-    </div>
-    <div class="nt-body" id="momBody" style="display:none">
-      <div id="momContent"></div>
-    </div>
-  </div>
-
-  <!-- PROFIT OPTIMIZATION -->
-  <div class="panel">
-    <div class="phdr" onclick="togglePanel('ppBody','ppTog')">
-      <h2>&#x1F4B0; Profit Optimization</h2>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div id="ppCounts"></div>
-        <span class="ptog" id="ppTog">&#x25BC;</span>
-      </div>
-    </div>
-    <div class="nt-body open" id="ppBody"></div>
-  </div>
-
-  <!-- RISK -->
-  <div class="panel">
-    <div class="phdr" onclick="togglePanel('rdBody','rdTog')">
-      <h2>&#x26A0;&#xFE0F; Risk Monitor</h2>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div id="rdcRow"></div>
-        <span class="ptog" id="rdTog">&#x25BC;</span>
-      </div>
-    </div>
-    <div class="nt-body open" id="rdBody"></div>
-  </div>
-
-  <!-- TIPRANKS TABLE -->
-  <div class="panel">
-    <div class="phdr" onclick="togglePanel('trBody','trTog')">
-      <h2>&#x1F4CA; TipRanks Overview</h2>
-      <span class="ptog" id="trTog">&#x25BC;</span>
-    </div>
-    <div id="trBody"></div>
   </div>
 
   <!-- STRATEGY DASHBOARD (shown when aiCache has entries) -->
@@ -1220,34 +1163,34 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
     <!-- Action required: SELL / REDUCE -->
     <div class="panel" id="aiSellPanel">
       <div class="phdr" onclick="togglePanel('aiSellBody','aiSellTog')">
-        <h2>&#x1F6A8; Action Required — Sell / Reduce</h2>
+        <h2>&#x1F6A8; Action Required &#x2014; Sell / Reduce <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:5px">holdings you own</span></h2>
         <span class="ptog" id="aiSellTog">&#x25BC;</span>
       </div>
       <div class="pp-body open" id="aiSellBody"></div>
     </div>
 
-    <!-- Watch: near target or approaching risk -->
+    <!-- Watch -->
     <div class="panel" id="aiWatchPanel">
       <div class="phdr" onclick="togglePanel('aiWatchBody','aiWatchTog')">
-        <h2>&#x1F440; Watch Closely — Review Before Next Move</h2>
+        <h2>&#x1F440; Watch Closely <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:5px">holdings you own &#x2014; monitor before acting</span></h2>
         <span class="ptog" id="aiWatchTog">&#x25BC;</span>
       </div>
       <div class="pp-body open" id="aiWatchBody"></div>
     </div>
 
-    <!-- Buy / Strong Buy -->
+    <!-- Buy / Add More -->
     <div class="panel" id="aiBuyPanel">
       <div class="phdr" onclick="togglePanel('aiBuyBody','aiBuyTog')">
-        <h2>&#x1F4C8; Buy / Add Opportunities</h2>
+        <h2>&#x1F4C8; Buy / Add More <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:5px">holdings you already own &#x2014; AI says add more</span></h2>
         <span class="ptog" id="aiBuyTog">&#x25BC;</span>
       </div>
       <div class="pp-body open" id="aiBuyBody"></div>
     </div>
 
-    <!-- Hold comfortably -->
+    <!-- Hold -->
     <div class="panel" id="aiHoldPanel">
       <div class="phdr" onclick="togglePanel('aiHoldBody','aiHoldTog')">
-        <h2>&#x23F8; Hold &amp; Monitor</h2>
+        <h2>&#x23F8; Hold &amp; Monitor <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:5px">holdings you own &#x2014; no action needed</span></h2>
         <span class="ptog" id="aiHoldTog">&#x25B6;</span>
       </div>
       <div class="pp-body" id="aiHoldBody"></div>
@@ -1255,7 +1198,7 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
 
   </div>
 
-</div><!-- end .app -->
+</div>
 <!-- ═══ TAB 4: SMART BUY IDEAS ═══ -->
 <div class="tab-content" id="tab-buy">
 
@@ -1535,7 +1478,8 @@ function switchTab(id, btn) {
   document.getElementById('tab-' + id).classList.add('active');
   btn.classList.add('active');
   if (id === 'rebal')    buildRebalTab();
-  if (id === 'pf')       buildMomentumPanel();
+  if (id === 'pf')       { buildMomentumPanel(); render(); }
+  if (id === 'ai')       buildAIDashboard();
   if (id === 'activity') buildActivityTab();
 }
 
@@ -1934,22 +1878,45 @@ async function fetchData() {
         setFetchStatus('loading', '⏳ Fetching Activity CSV from Dropbox…');
         try {
           const acText = await fetchOneDriveCSV(acLink);
+          if (!acText) {
+            // Fetch failed — try to use previously saved activity data
+            const savedAC = localStorage.getItem('pf_activity');
+            if (savedAC) {
+              window._activityTrades = JSON.parse(savedAC);
+              setFetchStatus('loading', `⚠ Activity CSV fetch failed — using ${window._activityTrades.length} cached trades from last successful fetch`);
+              await new Promise(r => setTimeout(r, 2500));
+            } else {
+              setFetchStatus('loading', '⚠ Activity CSV fetch failed — check your Dropbox link (must be a shared link from dropbox.com)');
+              await new Promise(r => setTimeout(r, 2500));
+            }
+          }
           if (acText) {
             window._acText = acText;
             window._activityTrades = parseActivityCSV(acText);
             snapshotActivityHistory(window._activityTrades);
             console.log('[Activity] Loaded', window._activityTrades.length, 'trades');
+            setFetchStatus('ok', `✅ Activity loaded — ${window._activityTrades.length} trades (${window._activityTrades.filter(t=>t.action==='SELL').length} sells, ${window._activityTrades.filter(t=>t.action==='BUY').length} buys)`);
             // Persist immediately so it survives page reload
             try {
               const acStr = JSON.stringify(window._activityTrades);
               if (acStr.length < 200000) localStorage.setItem('pf_activity', acStr);
             } catch(e) {}
-            // Render tab if already open
-            if (document.getElementById('tab-activity')?.classList.contains('active')) {
-              buildActivityTab();
+            // Update activity tab status bar immediately
+            const _actSt = document.getElementById('actStatusText');
+            if (_actSt) {
+              const _sells = window._activityTrades.filter(t=>t.action==='SELL').length;
+              const _buys  = window._activityTrades.filter(t=>t.action==='BUY').length;
+              const _pend  = window._activityTrades.filter(t=>t.isPending).length;
+              _actSt.innerHTML = `✅ <strong>${window._activityTrades.length} trades</strong> loaded &nbsp;·&nbsp; ${_sells} sells · ${_buys} buys · ${_pend} pending`;
             }
+            // Render tab if already open, otherwise data is ready for when user clicks
+            try { buildActivityTab(); } catch(e) {}
           }
-        } catch(e) { console.warn('[Activity] fetch failed:', e); }
+        } catch(e) {
+          console.warn('[Activity] fetch failed:', e);
+          setFetchStatus('loading', `⚠ Activity CSV fetch failed: ${e.message} — continuing without activity data`);
+          await new Promise(r => setTimeout(r, 2000)); // show error briefly
+        }
       }
     }
 
@@ -1961,23 +1928,18 @@ async function fetchData() {
     const trCheck = parseTipRanksCSV(trText);
     const trCount = Object.keys(trCheck).length;
 
-    // ── BLANK DASHBOARD: new data = fresh start for AI analysis ──
-    // Clear stale PF and AI cache so prompts are regenerated fresh
+    // ── BLANK DASHBOARD: new data = fresh start ──
+    // Clear PF data (rebuilt by Run Analysis) but KEEP aiCache — AI insights
+    // remain valid for the same tickers, user shouldn't have to re-paste every time.
     PF = { summary: null, holdings: [] };
-    Object.keys(aiCache).forEach(k => delete aiCache[k]);
     aiApplied = 0;
-    // Clear stored AI caches (PF data will be replaced after Run Analysis)
-    ls_del(LS_AI_CACHE);
     ls_del(LS_PF_DATA);
     ls_del('pf_sbi_cache');
-    ls_del('pf_activity');
+    // NOTE: aiCache, pf_activity kept — they persist independently of PF data refresh
     Object.keys(buySmartCache).forEach(k => delete buySmartCache[k]);
     updateSBIBadge(0);
-    // Reset dashboard to empty state
-    initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR();
-    initHead(); render(); buildAIDashboard();
-
     // Store raw text for Run Analysis
+    // (dashboard is built by Run Analysis step 3, not here)
     window._pfText   = pfText;
     window._trText   = trText;
     window._srcLabel = srcLabel;
@@ -1989,7 +1951,12 @@ async function fetchData() {
     updateFetchBadge();
 
     dataReady = true;
-    setFetchStatus('ok', `✅ ${pfCount} positions, ${trCount} TipRanks entries — dashboard cleared for fresh analysis`);
+    const _acCount = window._activityTrades ? window._activityTrades.length : 0;
+    const _acLinkSet = !!document.getElementById('odAC')?.value.trim();
+    const _acNote = _acCount ? ` · ${_acCount} activity trades loaded` :
+                    _acLinkSet ? ' · ⚠ Activity CSV fetch failed (check link)' :
+                    ' · No activity link set (add in Dropbox card)';
+    setFetchStatus('ok', `✅ ${pfCount} positions · ${trCount} TipRanks entries${_acNote} — ready for Step 2`);
     markStepDone(1, `${pfCount} positions from ${srcLabel} · ${lastFetchTime}`);
     unlockStep(2);
     document.getElementById('step3').classList.remove('locked');
@@ -2696,7 +2663,6 @@ function getSellPriceHistory(ticker) {
 function parseActivityCSV(text) {
   const lines = text.split(/\r?\n/);
   const trades = [];
-  // Skip header lines (0-6), find data rows by checking date pattern
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     // Parse CSV respecting quoted fields
@@ -2710,32 +2676,33 @@ function parseActivityCSV(text) {
     }
     cols.push(cur.trim());
 
-    if (cols.length < 7) continue;
-    const date    = cols[0].trim();
-    const settle  = cols[1].trim();
-    const desc    = cols[2].trim();
-    const ticker  = cols[4].trim();
-    const qtyRaw  = cols[5].trim();
-    const priceRaw= cols[6].trim();
+    if (cols.length < 8) continue;
+    const date = cols[0].trim();
 
-    // Must have date pattern MM/DD/YYYY
+    // Must start with date MM/DD/YYYY
     if (!/^[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4}/.test(date)) continue;
-    // Must have ticker (not blank, not CUSIP numbers)
-    if (!ticker || /^[0-9]{6,}/.test(ticker)) continue;
+
+    // Merrill Edge 10-col format:
+    // [0]Trade Date [1]Settlement Date [2]Account [3]Description [4]Type [5]Symbol [6]Quantity [7]Price [8]Amount [9]blank
+    const settle   = cols[1].trim();
+    const desc     = cols[3].trim();
+    const ticker   = cols[5].trim();
+    const qtyRaw   = cols[6].trim();
+    const priceRaw = cols[7].trim();
+
+    // Must have ticker (not blank, not CUSIP pure-number)
+    if (!ticker || /^[0-9]{6,}$/.test(ticker)) continue;
     // Blank quantity = dividend/interest → skip
     if (!qtyRaw) continue;
 
-    const qty   = parseFloat(qtyRaw.replace(/,/g,''));
-    const price = parseFloat(priceRaw.replace(/[$,]/g,''));
-    if (isNaN(qty) || isNaN(price) || price <= 0) continue;
+    const qty   = parseFloat(qtyRaw.replace(/,/g, ''));
+    const price = parseFloat(priceRaw.replace(/[$,()]/g, ''));
+    if (isNaN(qty) || qty === 0 || isNaN(price) || price <= 0) continue;
 
     const isPending = settle.toLowerCase().includes('pending') || desc.toLowerCase().includes('pending');
     const action    = qty > 0 ? 'BUY' : 'SELL';
 
-    trades.push({
-      date, settle, desc, ticker,
-      action, qty: Math.abs(qty), price, isPending,
-    });
+    trades.push({ date, settle, desc, ticker, action, qty: Math.abs(qty), price, isPending });
   }
   return trades;
 }
@@ -2757,13 +2724,18 @@ function getAllBuys(trades) {
 }
 
 function getCurrentPrice(ticker) {
-  // Try portfolio holdings first
+  // 1. Portfolio holdings — most accurate (from your actual Merrill statement)
   const h = PF.holdings.find(h => h.ticker === ticker);
   if (h) {
     const p = parseFloat((h.price||'').replace(/[$,]/g,''));
     if (!isNaN(p) && p > 0) return p;
   }
-  // Try TR_WATCHLIST
+  // 2. Live TipRanks parsed data — price_f from the fetched CSV (col 3: Price)
+  if (window._trDataParsed && window._trDataParsed[ticker]) {
+    const p = window._trDataParsed[ticker].price_f;
+    if (p && p > 0) return p;
+  }
+  // 3. Static TR_WATCHLIST snapshot (last resort — may be stale)
   const w = TR_WATCHLIST.find(w => w.ticker === ticker);
   if (w && w.price) return w.price;
   return null;
@@ -2785,6 +2757,33 @@ function getTRData(ticker) {
 }
 
 // ── BUILD ACTIVITY TAB ────────────────────────────────────────
+function loadActivityFileLocal(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      window._activityTrades = parseActivityCSV(e.target.result);
+      const n = window._activityTrades.length;
+      if (!n) { document.getElementById('odACFileStatus').textContent = '⚠ 0 trades parsed — check file format'; return; }
+      snapshotActivityHistory(window._activityTrades);
+      // Persist
+      try { const s = JSON.stringify(window._activityTrades); if (s.length < 200000) localStorage.setItem('pf_activity', s); } catch(e) {}
+      const sells = window._activityTrades.filter(t=>t.action==='SELL').length;
+      const buys  = window._activityTrades.filter(t=>t.action==='BUY').length;
+      const pend  = window._activityTrades.filter(t=>t.isPending).length;
+      document.getElementById('odACFileStatus').textContent = `✅ ${n} trades (${buys} buys, ${sells} sells, ${pend} pending)`;
+      // Update activity tab status
+      const st = document.getElementById('actStatusText');
+      if (st) st.innerHTML = `✅ <strong>${n} trades</strong> loaded from file &nbsp;·&nbsp; ${sells} sells · ${buys} buys · ${pend} pending`;
+      try { buildActivityTab(); } catch(err) {}
+    } catch(err) {
+      document.getElementById('odACFileStatus').textContent = '⚠ Error: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+}
+
 function buildActivityTab() {
   const trades  = window._activityTrades || [];
   const empty   = document.getElementById('actEmpty');
@@ -3326,13 +3325,17 @@ async function runAnalysis3() {
   try {
     const pfData = parsePortfolioCSV(window._pfText);
     setRunProg3(40); setRunSt3('loading', '⏳ Parsing TipRanks CSV…');
-    const trData = parseTipRanksCSV(window._trText || '');
+    const trData = parseTipRanksCSV(window._trText || ''); window._trDataParsed = trData;
     setRunProg3(65); setRunSt3('loading', '⏳ Building portfolio from live data…');
     buildPFFromSources(pfData, trData);
     setRunProg3(85); setRunSt3('loading', '⏳ Rendering dashboard…');
 
     // Rebuild dashboard panels
     initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR(); initHead(); render(); buildAIDashboard();
+    // Re-inject AI cards — aiCache persists across fetches
+    if (Object.keys(aiCache).length) {
+      PF.holdings.forEach(h => { try { if (aiCache[h.ticker]) injectAI(h.ticker); } catch(e) {} });
+    }
   // Refresh rebalance tab data (will render when tab is opened)
   if (typeof buildRebalTab === 'function') try { buildRebalTab(); } catch(e) {} initWatchlist(); initBuyTab(); initScanTab();
     saveSession();
@@ -3366,9 +3369,7 @@ async function runAnalysis3() {
     buildMomentumPanel();
     // Refresh activity tab (portfolio prices now available for re-entry calculations)
     if (window._activityTrades && window._activityTrades.length) {
-      if (document.getElementById('tab-activity')?.classList.contains('active')) {
-        buildActivityTab();
-      }
+      buildActivityTab(); // always refresh so prices update
     }
 
     // Auto-switch to portfolio tab
@@ -3473,7 +3474,7 @@ function makeMasterPrompt() {
       return { ...w, _score: s };
     })
     .sort((a,b) => b._score - a._score)
-    .slice(0, 40);
+    .slice(0, 20);
   const wl = wlScored;
   const wlLines = wl.map(w => {
     const epsg = w.eps_growth != null ? `EPS_Growth:${w.eps_growth.toFixed(0)}%` : '';
@@ -3501,18 +3502,16 @@ function makeMasterPrompt() {
 You are an expert portfolio strategist with web search. Run FOUR tasks and return ONE JSON object.
 
 \u2550\u2550 TASK 1 \u2014 PORTFOLIO AI STRATEGY (${PF.holdings.length} holdings) \u2550\u2550
+Analyse every holding below. For each return action, conviction, risk_flag, risk_level, what_next, sell_reason, earnings_note.
+Keep each field SHORT (1 line max). Cover ALL ${PF.holdings.length} tickers — do not skip any.
 ${nearTgt ? 'NEAR-TARGET (consider SELL/REDUCE): ' + nearTgt : ''}
 ${portLines}
 
 \u2550\u2550 TASK 2 \u2014 EARNINGS AI COMMENTARY \u2550\u2550
 ${earnFlg ? 'Holdings with earnings next 10 days (dates/signals from TipRanks data): ' + earnFlg + '\nFor each: search analyst EPS estimates, recent guidance, warnings. Add 2-3 sentences of AI commentary on whether the signal looks right and what to watch for.' : 'No upcoming earnings in next 10 days \u2014 return "earnings":[]'}
 
-\u2550\u2550 TASK 3 \u2014 TOP 20 BUY PICKS from pre-scored watchlist (${wl.length} candidates, aggressive <1yr profile) \u2550\u2550
-These ${wl.length} stocks are already ranked by PreScore (1yr momentum + analyst upside + SmartScore + HF activity + news sentiment).
-Profile: ${prof} | Horizon: ${hor} — favour high momentum, high upside, strong institutional signals.
-Select the 20 best for an aggressive <1yr investor. Search recent news for each before deciding.
-For EACH of your 20 picks, return the VRNS-style deep insight with situation, bull_case (3 points), bear_case (3 points), verdict, and specific entry guidance.
-
+\u2550\u2550 TASK 3 \u2014 TOP 10 BUY PICKS from watchlist (${wl.length} pre-scored candidates) \u2550\u2550
+Pick the 10 best for aggressive <1yr growth. Keep output compact.
 ${wlLines}
 
 \u2550\u2550 TASK 4 \u2014 ONLINE INDICATORS (all portfolio + top 20 watchlist tickers) \u2550\u2550
@@ -3522,10 +3521,10 @@ RETURN FORMAT \u2014 one JSON object with exactly these four keys:
 {
   "portfolio":  [{"ticker":"AAPL","action":"BUY|HOLD|REDUCE|SELL|STRONG BUY","conviction":"High|Medium|Low","risk_flag":false,"risk_level":"Critical|High|Medium|Low","situation":"2-3 sentences: what is happening RIGHT NOW with this stock — recent news, price action, key events","bull_case":["3 specific reasons to buy/hold — data-backed, concise"],"bear_case":["3 specific risks — concrete, not generic"],"verdict":"1-2 sentence bottom-line call: is it safe, aggressive, speculative? What kind of investor should own it?","what_next":"Specific action with exact price levels and % to trim/sell/add","sell_reason":"If risk_flag/SELL/REDUCE: specific reason with numbers. Else empty.","earnings_note":"Exact earnings date, EPS estimate, and pre-earnings signal"}],
   "earnings":   [{"ticker":"ADBE","earnings_date":"11-Jun-26","signal":"BUY_BEFORE|SELL_BEFORE|HOLD|WAIT","expectation":"BEAT|MISS|IN-LINE|UNCERTAIN","eps_estimate":"$5.87","eps_prev_year":"$5.06","ai_commentary":"2-3 sentences: context beyond raw data, risks, catalysts, what to watch"}],
-  "watchlist":  [{"ticker":"AMAT","score":9,"action":"STRONG_BUY|BUY|HOLD|SKIP","risk_level":"Low|Medium|High|Very High","speed":"Fast|Moderate|Slow","situation":"2-3 sentences on what is happening with this stock RIGHT NOW — news, momentum, catalysts","bull_case":["up to 3 specific reasons to buy with data"],"bear_case":["up to 3 concrete risks with numbers"],"verdict":"1-2 sentence bottom line — is this safe, speculative, or aggressive? Who should buy it?","upside_thesis":"","risk":"","what_to_buy":"entry price range and position size guidance","earnings_note":"","news_summary":"","strategy_rationale":""}],
+  "watchlist":  [{"ticker":"AMAT","action":"STRONG_BUY|BUY|HOLD|SKIP","risk_level":"Low|Medium|High|Very High","verdict":"1 sentence why buy","what_to_buy":"entry $X-Y"}],
   "indicators": [{"ticker":"AAPL","rsi":52,"short_interest_pct":0.6,"pe_vs_sector":"fair","analyst_momentum":"neutral"}]
 }
-Rules: include ALL ${PF.holdings.length} holdings in portfolio, exactly 20 in watchlist, all tickers in indicators, only earnings-window stocks in earnings. Return ONLY the JSON object.`;
+Rules: include ALL ${PF.holdings.length} holdings in portfolio array — do not skip any. Keep every field value SHORT (one line). Watchlist: top 10 picks only. Return ONLY the JSON object — no markdown, no preamble.`;
 }
 function makeWatchlistPrompt() {
   if (!window.TR_WATCHLIST || typeof TR_WATCHLIST === 'undefined') return '⚠️ No watchlist data loaded.';
@@ -3644,7 +3643,7 @@ function applyPasted() {
   try {
     const js = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
     // MASTER RESPONSE — object with portfolio / watchlist / indicators keys
-    if (js && !Array.isArray(js) && (js.portfolio || js.watchlist || js.indicators)) {
+    if (js && !Array.isArray(js) && ('portfolio' in js || 'watchlist' in js || 'indicators' in js)) {
       let aiC=0,wlC=0,indC=0;
       // Build name→ticker lookup for fuzzy matching
       const tickerByName = {};
@@ -3654,21 +3653,48 @@ function applyPasted() {
         if (shortName) tickerByName[shortName] = h.ticker;
       });
       (js.portfolio||[]).forEach(r => {
-        if (!r.ticker) return;
-        // Try exact match first
-        let matched = PF.holdings.find(h => h.ticker === r.ticker);
-        // Try case-insensitive ticker
-        if (!matched) matched = PF.holdings.find(h => h.ticker.toLowerCase() === r.ticker.toLowerCase());
-        // Try by name field if AI returned company name instead of ticker
+        // Support both 'ticker' and 'symbol' field names from AI
+        const rticker = (r.ticker || r.symbol || '').trim();
+        if (!rticker) return;
+        // Try exact match
+        let matched = PF.holdings.find(h => h.ticker === rticker);
+        // Case-insensitive
+        if (!matched) matched = PF.holdings.find(h => h.ticker.toLowerCase() === rticker.toLowerCase());
+        // Normalize dots/slashes (BRK.B vs BRK/B)
+        if (!matched) {
+          const norm = rticker.replace(/[.\/]/g, '-');
+          matched = PF.holdings.find(h => h.ticker.replace(/[.\/]/g, '-').toLowerCase() === norm.toLowerCase());
+        }
+        // By company name
         if (!matched && r.name) {
           const rName = r.name.replace(/ INC| CORP| COM| LTD/gi,'').trim().toLowerCase();
           const tk = tickerByName[rName];
           if (tk) matched = PF.holdings.find(h => h.ticker === tk);
         }
-        if (matched) { aiCache[matched.ticker] = { ...r, ticker: matched.ticker }; aiC++; }
+        if (matched) {
+          aiCache[matched.ticker] = { ...r, ticker: matched.ticker };
+          aiC++;
+        } else {
+          console.warn('[AI Match] No match for:', rticker, 'PF tickers:', PF.holdings.map(h=>h.ticker).join(','));
+        }
       });
       // Earnings AI commentary from master response
-      (js.earnings||[]).forEach(r=>{if(!r.ticker)return; const existing=earningsCache[r.ticker]||{}; earningsCache[r.ticker]={...existing,has_earnings:true,earnings_date:r.earnings_date||existing.earnings_date,signal:r.signal||existing.signal,expectation:r.expectation||existing.expectation,eps_estimate:r.eps_estimate||existing.eps_estimate||'N/A',eps_prev_year:r.eps_prev_year||existing.eps_prev_year||'N/A',rationale:r.ai_commentary||(existing.rationale||''),days_until:existing.days_until??0};});
+      (js.earnings||[]).forEach(r=>{
+        if(!r.ticker)return;
+        const existing=earningsCache[r.ticker]||{};
+        earningsCache[r.ticker]={
+          ...existing,
+          ticker:        r.ticker,
+          has_earnings:  true,
+          earnings_date: r.earnings_date||existing.earnings_date,
+          signal:        r.signal||existing.signal,
+          expectation:   r.expectation||existing.expectation,
+          eps_estimate:  r.eps_estimate||existing.eps_estimate||'N/A',
+          eps_prev_year: r.eps_prev_year||existing.eps_prev_year||'N/A',
+          rationale:     r.ai_commentary||(existing.rationale||''),
+          days_until:    existing.days_until??0
+        };
+      });
       renderEarningsFromCache();
       (js.watchlist||[]).forEach(r=>{if(!r.ticker)return;wlAICache[r.ticker]={
         score:              Number(r.score)||5,
@@ -3688,20 +3714,21 @@ function applyPasted() {
       };wlC++;});
       (js.indicators||[]).forEach(r=>{if(!r.ticker)return;buySmartCache[r.ticker]={rsi:r.rsi??null,short_interest_pct:r.short_interest_pct??null,pe_vs_sector:r.pe_vs_sector??null,analyst_momentum:r.analyst_momentum??null,strategy_rationale:r.strategy_rationale??null};indC++;});
       aiApplied=Object.keys(aiCache).length; updateStep3Hint();
-      render();buildRisk();buildTR();renderWatchlist();renderBuyTab();
+      render();
+      try { buildRisk(); } catch(e) {}
+      try { buildTR(); } catch(e) {}
+      // Inject AI into all rendered cards
+      PF.holdings.forEach(h => { if (aiCache[h.ticker]) injectAI(h.ticker); });
       setTimeout(()=>{
         buildAIDashboard();
         saveSession();
-        updateSBIBadge(indC);
-        // Re-inject into any open cards immediately
-        document.querySelectorAll('.sc.open').forEach(el => {
-          const tk = el.dataset.tk;
-          if (tk && aiCache[tk]) injectAI(tk);
-        });
+        try { updateSBIBadge(indC); } catch(e) {}
       },100);
       const missed = PF.holdings.filter(h => !aiCache[h.ticker]).map(h => h.ticker);
       const missedStr = missed.length ? ` · Missing: ${missed.slice(0,5).join(', ')}${missed.length>5?'…':''}` : '';
-      st.textContent=`✅ Master Analysis — ${aiC} portfolio strategies, ${wlC} watchlist picks, ${indC} indicators loaded${missedStr}`;
+      const pfCount2 = PF.holdings.length;
+      const pfNote = pfCount2 === 0 ? ' ⚠ Run Analysis (Step 3) first so portfolio tickers are loaded' : '';
+      st.textContent=`✅ Master Analysis — ${aiC}/${js.portfolio?.length||0} portfolio strategies matched, ${wlC} watchlist picks, ${indC} indicators loaded${missedStr}${pfNote}`;
       st.className='apply-status ok'; return;
     }
     // STANDARD RESPONSE — plain array
@@ -3737,7 +3764,7 @@ function applyPasted() {
         };
         wlC++;
       });
-      renderBuyTab();
+      try { renderBuyTab(); } catch(e) { console.error('renderBuyTab wl:', e); }
       st.textContent = `✅ ${wlC} watchlist picks loaded — check Smart Buy and Rebalance tabs`;
       st.className = 'apply-status ok';
       saveSession();
@@ -3751,7 +3778,14 @@ function applyPasted() {
     });
     aiApplied = Object.keys(aiCache).length;
     updateStep3Hint();
-    st.textContent = `\u2705 ${applied} AI result${applied !== 1 ? 's' : ''} cached \u2014 load into dashboard after Step 3.`;
+    // Re-render grid so injectAI runs on all cards
+    if (PF.holdings.length) {
+      render();
+      PF.holdings.forEach(h => { if (aiCache[h.ticker]) injectAI(h.ticker); });
+    }
+    const missedTickers = PF.holdings.filter(h => !aiCache[h.ticker]).map(h => h.ticker);
+    const missedStr = missedTickers.length ? ` · Missing: ${missedTickers.slice(0,5).join(', ')}` : '';
+    st.textContent = `✅ ${applied} AI results loaded${missedStr}`;
     st.className = 'apply-status ok';
     setTimeout(() => { buildAIDashboard(); saveSession(); }, 100);
   } catch(e) { st.textContent = 'Parse error: ' + e.message.slice(0, 100); st.className = 'apply-status err'; }
@@ -3890,7 +3924,7 @@ function getList() {
   return list;
 }
 function render() {
-  document.getElementById('cAll').textContent = PF.holdings.length ? `(${PF.holdings.length})` : '';
+  const _cAll = document.getElementById('cAll'); if(_cAll)_cAll.textContent = PF.holdings.length ? `(${PF.holdings.length})` : '';
   const list = getList(); const G = document.getElementById('holdingsGrid');
   if (!list.length) { G.innerHTML = `<div class="empty">${PF.holdings.length ? 'No holdings match.' : 'Complete Steps 1-3 on the <strong>Data Source &amp; Run</strong> tab to load your portfolio.'}</div>`; return; }
   G.innerHTML = list.map(h => cardHTML(h)).join('');
@@ -3923,7 +3957,7 @@ function toggleCard(t) {
 }
 function jumpTo(ticker) { switchTab('pf', document.querySelectorAll('.tab-btn')[1]); curFilter = 'all'; document.querySelectorAll('.fb').forEach(b => b.classList.remove('on')); document.querySelector('.fb').classList.add('on'); render(); setTimeout(() => { const el = document.getElementById('sc-' + ticker); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); toggleCard(ticker); } }, 100); }
 function setF(f, el) { curFilter = f; document.querySelectorAll('.fb').forEach(b => b.classList.remove('on')); el.classList.add('on'); render(); }
-function togglePanel(bId, tId) { const b = document.getElementById(bId); const t = document.getElementById(tId); const o = b.classList.toggle('open'); t.textContent = o ? '▼' : '▶'; }
+function togglePanel(bId, tId) { const b = document.getElementById(bId); const t = document.getElementById(tId); const o = b.classList.toggle('open'); b.style.display = ''; t.textContent = o ? '▼' : '▶'; }
 
 function injectAI(ticker) {
   const ai = aiCache[ticker]; const c = document.getElementById('aicard-' + ticker); if (!ai || !c) return;
@@ -3932,14 +3966,13 @@ function injectAI(ticker) {
   let h = `<div class="ai-card">
     <div class="ai-hdr">${aBdg(ai.action)}<span class="conv-tag">${ai.conviction}</span><span class="risk-tag rt-${ai.risk_level}">Risk: ${ai.risk_level}</span></div>`;
 
-  // Situation (current context — what's happening right now)
-  if (ai.situation) {
+  // Situation / summary - use whatever field is available from compact or full schema
+  const situationText = ai.situation || ai.summary || ai.sell_reason || ai.earnings_note || '';
+  if (situationText) {
     h += `<div class="insight-section insight-situation">
-      <div class="insight-label">📍 The Current Situation</div>
-      <div class="insight-text">${ai.situation}</div>
+      <div class="insight-label">📍 Analysis</div>
+      <div class="insight-text">${situationText}</div>
     </div>`;
-  } else if (ai.summary) {
-    h += `<div class="ai-sum">${ai.summary}</div>`;
   }
 
   // Bull & Bear case side by side
@@ -4150,7 +4183,7 @@ function generateEarningsPrompt() {
 }
 
 function copyEarningsPrompt() {
-  const text = document.getElementById('earnPromptOut').value;
+  const text = document.getElementById('earnPromptOut')?.value;
   if (!text || text.startsWith('⚠️')) { generateEarningsPrompt(); return; }
   navigator.clipboard.writeText(text).then(() => {
     const btn = event.target;
@@ -4162,7 +4195,7 @@ function copyEarningsPrompt() {
 
 // ── APPLY PASTED AI RESPONSE ────────────────────────────────────
 function applyEarningsResponse() {
-  const raw = document.getElementById('earnPasteIn').value.trim();
+  const raw = document.getElementById('earnPasteIn')?.value.trim();
   const st  = document.getElementById('earnApplyStatus');
   if (!raw) { st.textContent = 'Paste AI response first.'; st.style.color = '#c62828'; return; }
 
@@ -4186,7 +4219,7 @@ function applyEarningsResponse() {
     // Store in cache and render
     valid.forEach(r => { earningsCache[r.ticker] = r; });
     renderEarnings(valid);
-    document.getElementById('earnApplyStatus').textContent = `✅ ${valid.length} earnings found and loaded into dashboard`;
+    const _eas = document.getElementById('earnApplyStatus'); if(_eas)_eas.textContent = `✅ ${valid.length} earnings found and loaded into dashboard`;
     st.style.color = '#1e7e34';
     setTimeout(buildAIDashboard, 100);
 
@@ -4233,7 +4266,7 @@ async function scanEarningsAPI() {
       const res = await callClaude(EARN_SYS, usr, true);
       if (Array.isArray(res)) {
         res.filter(r => r.has_earnings).forEach(r => {
-          earningsCache[r.ticker] = r;
+          earningsCache[r.ticker] = {...r, ticker: r.ticker};
           allResults.push(r);
         });
       }
@@ -4488,10 +4521,10 @@ function renderWatchlist() {
   });
 
   const total = getWatchlistItems().length;
-  document.getElementById('wlCntAll').textContent   = `(${total})`;
-  document.getElementById('wlCountBadge').textContent = `${list.length} shown`;
+  const _wca = document.getElementById('wlCntAll'); if(_wca)_wca.textContent   = `(${total})`;
+  const _wcb = document.getElementById('wlCountBadge'); if(_wcb)_wcb.textContent = `${list.length} shown`;
 
-  const grid = document.getElementById('wlGrid');
+  const grid = document.getElementById('wlGrid'); if (!grid) return;
   if (!list.length) {
     grid.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:14px;grid-column:1/-1;text-align:center">No stocks match this filter.</div>';
     return;
@@ -4651,7 +4684,7 @@ function generateWatchlistPrompt() {
 }
 
 function copyWatchlistPrompt() {
-  const t = document.getElementById('wlPromptOut').value;
+  const t = document.getElementById('wlPromptOut')?.value;
   if (!t || t.startsWith('⚠️')) { generateWatchlistPrompt(); return; }
   navigator.clipboard.writeText(t).then(() => {
     const b = event.target; const orig = b.textContent;
@@ -4661,7 +4694,7 @@ function copyWatchlistPrompt() {
 
 // ── APPLY PASTED RESPONSE ─────────────────────────────────────
 function applyWatchlistResponse() {
-  const raw = document.getElementById('wlPasteIn').value.trim();
+  const raw = document.getElementById('wlPasteIn')?.value.trim();
   const st  = document.getElementById('wlApplyStatus');
   if (!raw) { st.textContent = 'Paste AI response first.'; st.className = 'wl-status err'; return; }
   try {
@@ -5341,6 +5374,12 @@ function saveSession() {
     if (lastRunTime)   ls_set(LS_RUN_TIME,   lastRunTime);
     if (lastFetchTime) ls_set(LS_FETCH_TIME,  lastFetchTime);
     if (window._srcLabel) ls_set(LS_SRC_LABEL, window._srcLabel);
+    // Save TR price map (ticker→price) so getCurrentPrice works after reload
+    if (window._trDataParsed) {
+      const priceMap = {};
+      Object.entries(window._trDataParsed).forEach(([tk, v]) => { if (v.price_f) priceMap[tk] = v.price_f; });
+      try { ls_set('pf_tr_prices', JSON.stringify(priceMap)); } catch(e) {}
+    }
   } catch(e) { console.warn('Session save failed:', e); }
 }
 
@@ -5495,7 +5534,7 @@ function generateSBIPrompt() {
 }
 
 function copySBIPrompt() {
-  const t = document.getElementById('sbiPromptOut').value;
+  const t = document.getElementById('sbiPromptOut')?.value;
   if (!t || t.startsWith('⚠️')) { generateSBIPrompt(); return; }
   navigator.clipboard.writeText(t).then(() => {
     const b = event.target;
@@ -5507,7 +5546,7 @@ function copySBIPrompt() {
 
 // ── APPLY PASTED RESPONSE ────────────────────────────────────
 function applySBIResponse() {
-  const raw = document.getElementById('sbiPasteIn').value.trim();
+  const raw = document.getElementById('sbiPasteIn')?.value.trim();
   const st  = document.getElementById('sbiApplyStatus');
   if (!raw) { st.textContent = 'Paste AI response first.'; st.className = 'sbi-status err'; return; }
 
@@ -5940,14 +5979,16 @@ function renderEarningsFromCache() {
     holdN ? `<span class="ec ec-amber">${holdN} Hold/Watch</span>` : '',
   ].filter(Boolean).join('');
   grid.innerHTML = display.map(e => {
-    const h = PF.holdings.find(x => x.ticker === e.ticker);
+    const ticker = e.ticker || Object.keys(earningsCache).find(k => earningsCache[k] === e) || '?';
+    e = {...e, ticker}; // ensure ticker in object
+    const h = PF.holdings.find(x => x.ticker === ticker);
     const cardCls = e.signal==='SELL_BEFORE'?'earn-card-red':e.signal==='BUY_BEFORE'?'earn-card-green':e.signal==='HOLD'?'earn-card-amber':'earn-card-gray';
     const sigCls  = e.signal==='SELL_BEFORE'?'es-sell':e.signal==='BUY_BEFORE'?'es-buy':'es-hold';
     const sigLbl  = {SELL_BEFORE:'\u26d4 SELL BEFORE EARNINGS',BUY_BEFORE:'\u2705 BUY / HOLD BEFORE EARNINGS',HOLD:'\u23f8 HOLD THROUGH EARNINGS',WATCH:'\uD83D\uDC41 WATCH',WAIT:'\u23F3 UNCERTAIN'}[e.signal]||e.signal;
     const urgCls  = e.days_until<=1?'color:#c62828;font-weight:700':e.days_until<=3?'color:#e65100;font-weight:700':'color:var(--blue)';
     const daysLbl = e.days_until<=0?'TODAY \u26a1':e.days_until===1?'Tomorrow \u26a1':`In ${e.days_until} days`;
     return `<div class="earn-card ${cardCls}">
-      <div class="earn-top"><span class="earn-tk" onclick="jumpTo('${e.ticker}')">${e.ticker}
+      <div class="earn-top"><span class="earn-tk" onclick="jumpTo('${ticker}')">${ticker}
         <span style="font-size:9px;font-weight:400;color:var(--text3)">${h?h.description.replace(/ INC| CORP| COM| LTD/gi,'').trim():''}</span>
       </span><span class="earn-days" style="${urgCls}">${daysLbl}</span></div>
       <div class="earn-date">\uD83D\uDCC5 ${e.earnings_date}${e.earnings_time&&e.earnings_time!=='TBA'?' \u00b7 '+e.earnings_time:''}</div>
@@ -6012,7 +6053,6 @@ function renderEarningsFromCache() {
     try {
       window._activityTrades = JSON.parse(storedAC);
       console.log('[Session] Activity restored:', window._activityTrades.length, 'trades');
-      // Ensure history snapshot exists for today
       snapshotActivityHistory(window._activityTrades);
     } catch(e) {}
   }
@@ -6028,9 +6068,30 @@ function renderEarningsFromCache() {
     updateFetchBadge();
   }
 
+  // Restore TR price map for getCurrentPrice (sold tickers not in portfolio)
+  try {
+    const savedPrices = ls_get('pf_tr_prices');
+    if (savedPrices) {
+      const pm = JSON.parse(savedPrices);
+      window._trDataParsed = window._trDataParsed || {};
+      Object.entries(pm).forEach(([tk, p]) => {
+        window._trDataParsed[tk] = window._trDataParsed[tk] || {};
+        window._trDataParsed[tk].price_f = p;
+      });
+    }
+  } catch(e) {}
+
   // 4. Render — if data was restored, dashboard fills immediately
   initKPIs(); buildNearTarget(); buildProfit(); buildRisk(); buildTR(); initHead(); render();
   buildAIDashboard(); initWatchlist(); initBuyTab();
+  // Inject AI into restored cards immediately
+  if (PF.holdings.length && Object.keys(aiCache).length) {
+    PF.holdings.forEach(h => { try { if (aiCache[h.ticker]) injectAI(h.ticker); } catch(e) {} });
+  }
+  // Build activity tab if data restored
+  if (window._activityTrades && window._activityTrades.length) {
+    try { buildActivityTab(); } catch(e) {}
+  }
 
   // 5. If GDrive links are saved AND no data yet, hint to fetch
   if (!dataReady) {
