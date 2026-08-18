@@ -844,11 +844,15 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
             <label>TipRanks CSV — Dropbox link <span class="gd-saved-badge" id="odSavedTR">Saved</span></label>
             <input type="url" id="odTR" placeholder="https://www.dropbox.com/scl/fi/.../tipranks.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
             <label style="margin-top:8px;display:block">Activity CSV — Dropbox link <span class="gd-saved-badge" id="odSavedAC">Saved</span> <span style="font-size:9px;color:var(--text3)">(optional)</span></label>
-            <input type="url" id="odAC" placeholder="https://www.dropbox.com/scl/fi/.../activity.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
-            <div style="margin-top:5px;display:flex;align-items:center;gap:8px">
-              <span style="font-size:10px;color:var(--text3)">Or upload directly:</span>
-              <input type="file" accept=".csv" id="odACFile" style="font-size:10px;color:var(--text2)" onchange="loadActivityFileLocal(this)"/>
-              <span id="odACFileStatus" style="font-size:10px;color:#2e7d32"></span>
+            <input type="url" id="odAC" placeholder="https://www.dropbox.com/scl/fi/.../activity.csv?rlkey=...&dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
+            <button onclick="testActivityLink()" style="margin-top:4px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;color:var(--text2)">🔗 Test Activity Link</button>
+            <span id="actLinkTestStatus" style="font-size:10px;margin-left:6px;color:var(--text3)"></span>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <label style="display:inline-flex;align-items:center;gap:6px;background:#1976d2;color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">
+                📂 Upload Activity CSV
+                <input type="file" accept=".csv" id="odACFile" style="display:none" onchange="loadActivityFileLocal(this)"/>
+              </label>
+              <span id="odACFileStatus" style="font-size:11px;color:#2e7d32;font-weight:500"></span>
             </div>
             <div style="font-size:10px;color:var(--text3);margin-top:5px">&#x2139; Free Dropbox account works. Update files daily by re-uploading — same link, fresh data.</div>
 
@@ -1654,39 +1658,57 @@ function isOneDriveLink(link) {
 }
 
 async function fetchOneDriveCSV(link) {
-  // Convert Dropbox share link to direct download URL
-  // www.dropbox.com → dl.dropboxusercontent.com (removes CORS restriction)
-  let url = link.trim()
-    .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
-    .replace(/[?&]dl=0/g, '')
-    .replace(/[?&]dl=1/g, '');
-
-  // Try direct fetch first (dl.dropboxusercontent.com supports CORS)
-  try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (r.ok) {
-      const t = await r.text();
-      if (t && t.length > 100 && !t.trimStart().startsWith('<')) return t;
+  // Build proper Dropbox direct-download URL preserving rlkey param
+  // New format: https://www.dropbox.com/scl/fi/xxx/file.csv?rlkey=xxx&dl=0
+  // Old format: https://www.dropbox.com/s/xxx/file.csv?dl=0
+  function toDirectUrl(raw) {
+    try {
+      const u = new URL(raw.trim());
+      u.hostname = 'dl.dropboxusercontent.com';
+      u.searchParams.delete('dl');          // remove dl=0 or dl=1
+      u.searchParams.delete('e');           // remove tracking param
+      // rlkey must be preserved — do NOT delete it
+      return u.toString();
+    } catch(e) {
+      // Fallback: simple string replace
+      return raw.trim()
+        .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
+        .replace(/([?&])dl=[01](&|$)/, '$2').replace(/&$/, '');
     }
-  } catch(e) { /* fall through to proxies */ }
+  }
 
-  // Fallback: try CORS proxies with both URL formats
-  const dlUrl = link.trim().replace(/[?&]dl=0/g,'').replace(/[?&]dl=1/g,'');
-  const wwwDl = dlUrl + (dlUrl.includes('?') ? '&dl=1' : '?dl=1');
+  const directUrl = toDirectUrl(link);
+
+  // Helper: check response is CSV (not HTML error page)
+  function isCSV(t) { return t && t.length > 100 && !t.trimStart().startsWith('<') && !t.toLowerCase().includes('<!doctype'); }
+
+  // 1. Direct fetch (works when Dropbox CORS allows it)
+  try {
+    const r = await fetch(directUrl, { signal: AbortSignal.timeout(18000) });
+    if (r.ok) { const t = await r.text(); if (isCSV(t)) return t; }
+  } catch(e) {}
+
+  // 2. Also try original link with dl=1 appended
+  const dl1Url = (() => {
+    try {
+      const u = new URL(link.trim()); u.searchParams.set('dl','1'); return u.toString();
+    } catch(e) { return link.trim().replace(/([?&])dl=[01]/, '$1dl=1') + (link.includes('?') ? '&dl=1' : '?dl=1'); }
+  })();
+
+  // CORS proxies — tried with both direct URL and dl=1 URL
   const proxies = [
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   ];
-  for (const tryUrl of [url, wwwDl]) {
+
+  for (const tryUrl of [directUrl, dl1Url]) {
     for (const pFn of proxies) {
       try {
-        const r = await fetch(pFn(tryUrl), { signal: AbortSignal.timeout(15000) });
-        if (r.ok) {
-          const t = await r.text();
-          if (t && t.length > 100 && !t.trimStart().startsWith('<') && !t.includes('<!DOCTYPE')) return t;
-        }
-      } catch(e) { /* try next */ }
+        const r = await fetch(pFn(tryUrl), { signal: AbortSignal.timeout(18000) });
+        if (r.ok) { const t = await r.text(); if (isCSV(t)) return t; }
+      } catch(e) {}
     }
   }
   return null;
@@ -1882,12 +1904,13 @@ async function fetchData() {
             // Fetch failed — try to use previously saved activity data
             const savedAC = localStorage.getItem('pf_activity');
             if (savedAC) {
-              window._activityTrades = JSON.parse(savedAC);
-              setFetchStatus('loading', `⚠ Activity CSV fetch failed — using ${window._activityTrades.length} cached trades from last successful fetch`);
-              await new Promise(r => setTimeout(r, 2500));
+              try { window._activityTrades = JSON.parse(savedAC); } catch(e) {}
+              const n = window._activityTrades ? window._activityTrades.length : 0;
+              setFetchStatus('loading', `✅ Activity: using ${n} cached trades (Dropbox fetch blocked — upload file directly in Dropbox card if needed)`);
+              await new Promise(r => setTimeout(r, 1500));
             } else {
-              setFetchStatus('loading', '⚠ Activity CSV fetch failed — check your Dropbox link (must be a shared link from dropbox.com)');
-              await new Promise(r => setTimeout(r, 2500));
+              setFetchStatus('loading', '⚠ Activity Dropbox fetch blocked — use "Upload Activity CSV" button in the Dropbox card below');
+              await new Promise(r => setTimeout(r, 1500));
             }
           }
           if (acText) {
@@ -1952,10 +1975,7 @@ async function fetchData() {
 
     dataReady = true;
     const _acCount = window._activityTrades ? window._activityTrades.length : 0;
-    const _acLinkSet = !!document.getElementById('odAC')?.value.trim();
-    const _acNote = _acCount ? ` · ${_acCount} activity trades loaded` :
-                    _acLinkSet ? ' · ⚠ Activity CSV fetch failed (check link)' :
-                    ' · No activity link set (add in Dropbox card)';
+    const _acNote = _acCount ? ` · ${_acCount} activity trades loaded` : ' · Upload Activity CSV in Dropbox card to enable Activity tab';
     setFetchStatus('ok', `✅ ${pfCount} positions · ${trCount} TipRanks entries${_acNote} — ready for Step 2`);
     markStepDone(1, `${pfCount} positions from ${srcLabel} · ${lastFetchTime}`);
     unlockStep(2);
@@ -2661,52 +2681,90 @@ function getSellPriceHistory(ticker) {
 // ══════════════════════════════════════════════════════════════
 
 function parseActivityCSV(text) {
-  const lines = text.split(/\r?\n/);
-  const trades = [];
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    // Parse CSV respecting quoted fields
-    const cols = [];
-    let cur = '', inQ = false;
+  // Strip BOM
+  let t = text;
+  if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+  // Unwrap JSON proxy response
+  if (t.trimStart().startsWith('{') && t.includes('"contents"')) {
+    try { t = JSON.parse(t).contents || t; } catch(e) {}
+  }
+
+  function parseLine(raw) {
+    const cols = []; let cur = '', inQ = false;
     for (const ch of raw) {
       if (inQ) { if (ch === '"') inQ = false; else cur += ch; }
-      else if (ch === '"') { inQ = true; }
+      else if (ch === '"') inQ = true;
       else if (ch === ',') { cols.push(cur.trim()); cur = ''; }
       else cur += ch;
     }
     cols.push(cur.trim());
-
-    if (cols.length < 8) continue;
-    const date = cols[0].trim();
-
-    // Must start with date MM/DD/YYYY
-    if (!/^[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4}/.test(date)) continue;
-
-    // Merrill Edge 10-col format:
-    // [0]Trade Date [1]Settlement Date [2]Account [3]Description [4]Type [5]Symbol [6]Quantity [7]Price [8]Amount [9]blank
-    const settle   = cols[1].trim();
-    const desc     = cols[3].trim();
-    const ticker   = cols[5].trim();
-    const qtyRaw   = cols[6].trim();
-    const priceRaw = cols[7].trim();
-
-    // Must have ticker (not blank, not CUSIP pure-number)
-    if (!ticker || /^[0-9]{6,}$/.test(ticker)) continue;
-    // Blank quantity = dividend/interest → skip
-    if (!qtyRaw) continue;
-
-    const qty   = parseFloat(qtyRaw.replace(/,/g, ''));
-    const price = parseFloat(priceRaw.replace(/[$,()]/g, ''));
-    if (isNaN(qty) || qty === 0 || isNaN(price) || price <= 0) continue;
-
-    const isPending = settle.toLowerCase().includes('pending') || desc.toLowerCase().includes('pending');
-    const action    = qty > 0 ? 'BUY' : 'SELL';
-
-    trades.push({ date, settle, desc, ticker, action, qty: Math.abs(qty), price, isPending });
+    return cols;
   }
-  return trades;
-}
 
+  function numOf(s) {
+    const v = parseFloat((s||'').replace(/[$,()]/g,''));
+    return isNaN(v) ? null : v;
+  }
+
+  // ── PASS 1: line-by-line (file has proper newlines) ──
+  const lines = t.split(/\r?\n/);
+  if (lines.length > 5) {
+    let hIdx=-1, iDate=-1, iSettle=-1, iDesc=-1, iTicker=-1, iQty=-1, iPrice=-1;
+    for (let i = 0; i < Math.min(lines.length, 12); i++) {
+      const low = lines[i].toLowerCase();
+      if (low.includes('trade date') || (low.includes('symbol') && low.includes('quantity'))) {
+        const cols = parseLine(lines[i]).map(c => c.toLowerCase());
+        const fc = kws => { for (const kw of kws) { const j = cols.findIndex(c => c.includes(kw)); if (j>=0) return j; } return -1; };
+        iDate=fc(['trade date']); iSettle=fc(['settlement']);
+        iDesc=fc(['description']); iTicker=fc(['symbol','cusip']);
+        iQty=fc(['quantity','qty']); iPrice=fc(['price']);
+        hIdx=i; break;
+      }
+    }
+    if (hIdx < 0) { iDate=0; iSettle=1; iDesc=3; iTicker=5; iQty=6; iPrice=7; hIdx=6; }
+    const needed = Math.max(iDate,iSettle,iTicker,iQty,iPrice);
+    const trades = [];
+    for (let i=hIdx+1; i<lines.length; i++) {
+      const cols = parseLine(lines[i]);
+      if (cols.length <= needed) continue;
+      const date = (cols[iDate]||'').trim();
+      if (!/^\d{1,2}\/\d{1,2}\/\d{4}/.test(date)) continue;
+      const ticker = (cols[iTicker]||'').trim();
+      if (!ticker || /^\d{6,}$/.test(ticker)) continue;
+      const qtyRaw = (cols[iQty]||'').trim();
+      if (!qtyRaw) continue;
+      const qty = numOf(qtyRaw), price = numOf(cols[iPrice]||'');
+      if (!qty || qty===0 || !price || price<=0) continue;
+      const settle = (cols[iSettle]||'').trim();
+      const desc = iDesc>=0 && iDesc<cols.length ? (cols[iDesc]||'').trim() : '';
+      trades.push({ date, settle, desc, ticker,
+        action: qty>0?'BUY':'SELL', qty:Math.abs(qty), price,
+        isPending: settle.toLowerCase().includes('pending') });
+    }
+    if (trades.length > 0) return trades;
+  }
+
+  // ── PASS 2: proxy joined all lines into one (spaces replace newlines) ──
+  // Match: ,TICKER ,QTY ,$PRICE  with optional spaces around values
+  const rx = /, *([A-Z]{1,5}) *,(-?\d[\d,]*(?:\.\d+)?) *,(\$\d[\d,.]+)/g;
+  const trades2 = [];
+  let m;
+  while ((m = rx.exec(t)) !== null) {
+    const ticker = m[1].trim();
+    if (/^\d{6,}$/.test(ticker)) continue;
+    const qty = numOf(m[2]), price = numOf(m[3]);
+    if (!qty || qty===0 || !price || price<=0) continue;
+    // Find trade date: look back 250 chars, take the first date (=trade date before settle date)
+    const before = t.slice(Math.max(0, m.index-250), m.index);
+    const dates = before.match(/\d{1,2}\/\d{1,2}\/\d{4}/g) || [];
+    const date = dates.length >= 2 ? dates[dates.length-2] : (dates[dates.length-1]||'?');
+    const settle = dates[dates.length-1] || '';
+    trades2.push({ date, settle, desc:'', ticker,
+      action: qty>0?'BUY':'SELL', qty:Math.abs(qty), price,
+      isPending: settle.toLowerCase().includes('pending') || before.toLowerCase().includes('pending') });
+  }
+  return trades2;
+}
 function getLastSells(trades) {
   // Returns {ticker: {date, price, qty, desc}} — most recent sell per ticker
   // Pending orders treated as confirmed (per user preference)
@@ -2757,6 +2815,26 @@ function getTRData(ticker) {
 }
 
 // ── BUILD ACTIVITY TAB ────────────────────────────────────────
+async function testActivityLink() {
+  const link = document.getElementById('odAC')?.value.trim();
+  const st   = document.getElementById('actLinkTestStatus');
+  if (!link) { if(st) st.textContent = '⚠ No link entered'; return; }
+  if(st) st.textContent = '⏳ Testing...';
+  const text = await fetchOneDriveCSV(link);
+  if (!text) {
+    if(st) st.innerHTML = '❌ Fetch failed — check Dropbox link is "Anyone with link → Can view"';
+    return;
+  }
+  const trades = parseActivityCSV(text);
+  if (trades.length) {
+    if(st) st.textContent = `✅ Link works — ${trades.length} trades found`;
+  } else {
+    // Show first 120 chars so user can see what came back
+    const preview = text.substring(0, 120).replace(/[\r\n]/g,' ');
+    if(st) st.innerHTML = `⚠ 0 trades — file preview: <code style="font-size:9px;background:#f5f5f5;padding:2px 4px">${preview}</code>`;
+  }
+}
+
 function loadActivityFileLocal(input) {
   const file = input.files[0];
   if (!file) return;
@@ -6054,6 +6132,15 @@ function renderEarningsFromCache() {
       window._activityTrades = JSON.parse(storedAC);
       console.log('[Session] Activity restored:', window._activityTrades.length, 'trades');
       snapshotActivityHistory(window._activityTrades);
+      // Show cached count in upload button status immediately
+      setTimeout(() => {
+        const badge = document.getElementById('odACFileStatus');
+        if (badge && window._activityTrades.length) {
+          const s = window._activityTrades.filter(t=>t.action==='SELL').length;
+          const b = window._activityTrades.filter(t=>t.action==='BUY').length;
+          badge.textContent = `✅ ${window._activityTrades.length} trades cached (${b} buys · ${s} sells)`;
+        }
+      }, 300);
     } catch(e) {}
   }
 
