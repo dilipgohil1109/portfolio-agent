@@ -845,7 +845,7 @@ body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(
             <input type="url" id="odTR" placeholder="https://www.dropbox.com/scl/fi/.../tipranks.csv?dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
             <label style="margin-top:8px;display:block">Activity CSV — Dropbox link <span class="gd-saved-badge" id="odSavedAC">Saved</span> <span style="font-size:9px;color:var(--text3)">(optional)</span></label>
             <input type="url" id="odAC" placeholder="https://www.dropbox.com/scl/fi/.../activity.csv?rlkey=...&dl=0" onclick="event.stopPropagation()" oninput="saveODriveLinks()"/>
-            <button onclick="testActivityLink()" style="margin-top:4px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;color:var(--text2)">🔗 Test Activity Link</button>
+            <button onclick="testActivityLink()" style="margin-top:5px;font-size:11px;padding:4px 12px;border-radius:4px;border:none;background:#1565c0;cursor:pointer;color:#fff;font-weight:600">🔗 Test Activity Link</button>
             <span id="actLinkTestStatus" style="font-size:10px;margin-left:6px;color:var(--text3)"></span>
             <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <label style="display:inline-flex;align-items:center;gap:6px;background:#1976d2;color:#fff;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">
@@ -3719,7 +3719,17 @@ function applyPasted() {
   const st  = document.getElementById('applyStatus2');
   if (!raw) { st.textContent = 'Paste AI response first.'; st.className = 'apply-status err'; return; }
   try {
-    const js = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+    // Clean invalid JSON number formats AI sometimes returns
+    const cleaned = raw
+      .replace(/```json\n?|```/g, '')
+      .trim()
+      // Fix: ": $1.55" → ": 1.55"  (dollar sign before number)
+      .replace(/:\s*"\$?([\d,]+\.?\d*)"/g, (m, n) => ': ' + parseFloat(n.replace(/,/g,'')) )
+      // Fix: ": $1.55," → ": 1.55,"  (unquoted dollar values)
+      .replace(/:\s*\$([\d,]+\.?\d*)/g, (m, n) => ': ' + parseFloat(n.replace(/,/g,'')) )
+      // Fix: commas in unquoted numbers  ": 1,234" → ": 1234"
+      .replace(/:\s*(-?\d{1,3})(,\d{3})+(\.\d+)?(?=[,\}\]])/g, (m) => m.replace(/,(\d{3})/g, '$1'));
+    const js = JSON.parse(cleaned);
     // MASTER RESPONSE — object with portfolio / watchlist / indicators keys
     if (js && !Array.isArray(js) && ('portfolio' in js || 'watchlist' in js || 'indicators' in js)) {
       let aiC=0,wlC=0,indC=0;
@@ -3866,7 +3876,14 @@ function applyPasted() {
     st.textContent = `✅ ${applied} AI results loaded${missedStr}`;
     st.className = 'apply-status ok';
     setTimeout(() => { buildAIDashboard(); saveSession(); }, 100);
-  } catch(e) { st.textContent = 'Parse error: ' + e.message.slice(0, 100); st.className = 'apply-status err'; }
+  } catch(e) {
+    // Try to identify which field caused the parse error
+    const emsg = e.message || '';
+    const tokenMatch = emsg.match(/Unexpected token '([^']+)'/);
+    const hint = tokenMatch ? ` — remove "$" or "," from number values near: ${tokenMatch[1]}` : '';
+    st.textContent = 'Parse error: ' + emsg.slice(0, 120) + hint;
+    st.className = 'apply-status err';
+  }
 }
 
 // API MODE in step 2
